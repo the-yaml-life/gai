@@ -3,6 +3,17 @@ ai:
   model: llama-3.3-70b-versatile
   max_tokens: 30000
   parallel_models:
+  - anannas/google/gemini-2.0-flash-exp:free
+  - anannas/google/gemma-2-9b-it:free
+  - anannas/google/gemma-3-12b-it:free
+  - anannas/google/gemma-3-27b-it:free
+  - anannas/google/gemma-3-4b-it:free
+  - anannas/huggingfaceh4/zephyr-7b-beta:free
+  - anannas/microsoft/phi-3-mini-128k-instruct:free
+  - anannas/meta-llama/llama-guard-4-12b
+  - anannas/moonshotai/kimi-k2-instruct
+  - anannas/openai/gpt-oss-120b
+  - anannas/openai/gpt-oss-20b
   - groq/compound
   - groq/compound-mini
   - llama-3.1-8b-instant

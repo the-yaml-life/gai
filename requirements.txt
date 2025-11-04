@@ -3,6 +3,7 @@ requests>=2.32.2
 python-dotenv>=1.0.0
 pyyaml>=6.0.0
 rich>=13.0.0
+questionary>=2.0.0
 
 # Optional: PostgreSQL backend support
 # Uncomment if you want to use PostgreSQL instead of SQLite

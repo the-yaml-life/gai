@@ -84,18 +84,76 @@ class MultiBackendClient:
         self.config = config
         self.verbose = verbose
 
-        # Primary model
-        primary_model = config.get('ai.model')
-        self.primary_client = create_client(primary_model, config, verbose)
-        self.primary_model = primary_model
-
         # Parallel models for multi-model generation
         self.parallel_models = config.get('ai.parallel_models', [])
+
+        # Primary model
+        primary_model = config.get('ai.model')
+
+        # Create primary client with parallel_models as fallback
+        # This enables automatic fallback when primary hits rate limit
+        self.primary_client = self._create_client_with_fallback(primary_model, self.parallel_models, config, verbose)
+        self.primary_model = primary_model
+
+        # Cache for available models (to avoid repeated API calls)
+        self._available_models_cache = None
+
+    def _create_client_with_fallback(self, primary_model: str, parallel_models: list, config: Config, verbose: bool):
+        """
+        Create a client for primary model.
+        Fallback across backends is handled by MultiBackendClient.generate()
+        """
+        # Just create the primary client without fallback
+        # (cross-backend fallback is handled at MultiBackendClient level)
+        return create_client(primary_model, config, verbose)
 
     def _log(self, message: str):
         """Log if verbose"""
         if self.verbose:
             print(f"[MultiBackendClient] {message}")
+
+    def _get_all_available_models(self) -> List[str]:
+        """
+        Get all available models from all backends (cached).
+
+        Returns list of model IDs with backend prefix (e.g., 'anannas/model', 'ollama/model')
+        Groq models have no prefix (default backend).
+        """
+        # Return cached if available
+        if self._available_models_cache is not None:
+            return self._available_models_cache
+
+        all_models = []
+
+        try:
+            self._log("Fetching available models from all backends...")
+
+            # Get models from all backends
+            backends_models = self.list_models(raw=False)
+
+            for backend, models in backends_models.items():
+                for model in models:
+                    model_id = model.get("id", "")
+                    if not model_id:
+                        continue
+
+                    # Add backend prefix (except for groq which is default)
+                    if backend == "groq":
+                        all_models.append(model_id)
+                    else:
+                        all_models.append(f"{backend}/{model_id}")
+
+            self._log(f"Found {len(all_models)} available models across all backends")
+
+            # Cache the result
+            self._available_models_cache = all_models
+
+        except Exception as e:
+            self._log(f"Failed to fetch available models: {e}")
+            # Return empty list on error - fallback will only use parallel_models
+            return []
+
+        return all_models
 
     def generate(
         self,
@@ -106,28 +164,85 @@ class MultiBackendClient:
         retry_with_fallback: bool = True
     ) -> str:
         """
-        Generate completion using primary model.
+        Generate completion using primary model with exhaustive fallback.
+
+        Fallback strategy:
+        1. Try primary model
+        2. Try parallel_models (high priority)
+        3. Try all other available models (low priority)
 
         Args:
             prompt: User prompt
             system_prompt: Optional system prompt
             max_tokens: Maximum tokens to generate
             temperature: Temperature override
-            retry_with_fallback: Whether to try fallback (only applies to Groq)
+            retry_with_fallback: Whether to try fallback models on failure
 
         Returns:
             Generated text
         """
+        # Try primary model first
         try:
             return self.primary_client.generate(
                 prompt=prompt,
                 system_prompt=system_prompt,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                retry_with_fallback=retry_with_fallback
+                retry_with_fallback=False  # Don't retry within same client
             )
         except (GroqError, OllamaError, AnannasError) as e:
-            raise LLMError(str(e))
+            self._log(f"Primary model failed: {e}")
+
+            # If fallback is disabled, raise immediately
+            if not retry_with_fallback:
+                raise LLMError(str(e))
+
+            # Build fallback model list with priority
+            # Priority 1: parallel_models (explicitly configured)
+            # Priority 2: all other available models
+            all_available_models = self._get_all_available_models()
+
+            # High priority: parallel_models
+            high_priority = [m for m in self.parallel_models if m != self.primary_model]
+
+            # Low priority: all others not in parallel_models
+            low_priority = [m for m in all_available_models if m not in self.parallel_models and m != self.primary_model]
+
+            # Combined list
+            fallback_models = high_priority + low_priority
+
+            if not fallback_models:
+                raise LLMError(f"No fallback models available. Primary error: {e}")
+
+            self._log(f"Trying {len(fallback_models)} fallback models ({len(high_priority)} priority, {len(low_priority)} additional)...")
+
+            # Try each fallback model
+            for idx, fallback_model in enumerate(fallback_models, 1):
+                try:
+                    priority_label = "priority" if fallback_model in high_priority else "additional"
+                    self._log(f"[{idx}/{len(fallback_models)}] Trying {priority_label} fallback: {fallback_model}")
+
+                    # Create client for fallback model
+                    fallback_client = create_client(fallback_model, self.config, self.verbose)
+
+                    # Try generation
+                    result = fallback_client.generate(
+                        prompt=prompt,
+                        system_prompt=system_prompt,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        retry_with_fallback=False
+                    )
+
+                    self._log(f"✓ Fallback successful with {fallback_model}")
+                    return result
+
+                except Exception as fallback_error:
+                    self._log(f"✗ Fallback {fallback_model} failed: {fallback_error}")
+                    continue
+
+            # All models failed
+            raise LLMError(f"All {len(fallback_models)} fallback models failed. Primary error: {e}")
 
     def generate_parallel(
         self,

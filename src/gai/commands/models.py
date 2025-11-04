@@ -8,7 +8,8 @@ from gai.core.config import Config
 from gai.ai.llm_factory import MultiBackendClient
 from rich.console import Console
 from rich.table import Table
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Confirm
+import questionary
 
 console = Console()
 
@@ -26,7 +27,7 @@ class ModelsCommand:
             verbose=verbose
         )
 
-    def run(self, select=False, filter_tier=None, debug=False, filter_backend=None):
+    def run(self, select=False, filter_tier=None, debug=False, filter_backend=None, filter_free=False):
         """
         List available models from all backends.
 
@@ -35,6 +36,7 @@ class ModelsCommand:
             filter_tier: Filter by specific tier if API provides it (e.g., flagship, fast, light, reasoning)
             debug: If True, show raw API response for debugging
             filter_backend: Filter by specific backend (groq, anannas, ollama)
+            filter_free: If True, show only free models (those with :free suffix)
         """
         console.print("\n[bold cyan]Fetching available models from all backends...[/bold cyan]\n")
 
@@ -92,16 +94,35 @@ class ModelsCommand:
                 console.print(f"[dim]Note: Tier filtering only works if the API provides tier metadata[/dim]")
                 return
 
-        # Create table with index column for selection
+        # Filter by free models if requested
+        if filter_free:
+            models = [m for m in models if ':free' in m.get("id", "").lower()]
+            console.print(f"[dim]Filtering for free models only[/dim]\n")
+
+            if not models:
+                console.print(f"[yellow]No free models found[/yellow]")
+                console.print(f"[dim]Free models are those with ':free' suffix in their ID[/dim]")
+                return
+
+        # Sort models: :free models first, then by backend, then by id
+        # This makes free models more visible in the selection UI
+        def sort_key(model):
+            model_id = model.get("id", "")
+            is_free = ':free' in model_id.lower()
+            backend = model.get("backend", "unknown")
+            # Sort order: free models first (0), then paid (1), then by backend, then by id
+            return (0 if is_free else 1, backend, model_id)
+
+        models.sort(key=sort_key)
+
+        # Create table for display only (selection happens via checkboxes)
         table = Table(show_header=True, header_style="bold magenta")
-        if select:
-            table.add_column("#", style="dim", width=4)
         table.add_column("Backend", style="magenta", width=8)
         table.add_column("Tier", style="green", width=10)
         table.add_column("Model ID", style="cyan", width=40)
         table.add_column("Context", style="yellow", justify="right", width=10)
 
-        for idx, model in enumerate(models, 1):
+        for model in models:
             backend = model.get("backend", "unknown")
             tier = model.get("tier", "standard")
             model_id = model.get("id", "unknown")
@@ -109,13 +130,11 @@ class ModelsCommand:
 
             # Color code tier
             tier_colored = self._format_tier(tier)
+            table.add_row(backend, tier_colored, model_id, context)
 
-            if select:
-                table.add_row(str(idx), backend, tier_colored, model_id, context)
-            else:
-                table.add_row(backend, tier_colored, model_id, context)
-
-        console.print(table)
+        # Only show table if not in select mode (select mode shows checkboxes instead)
+        if not select:
+            console.print(table)
         console.print(f"\n[dim]Total: {len(models)} text models[/dim]")
 
         # Show count per backend
@@ -225,12 +244,19 @@ class ModelsCommand:
         return "?"
 
     def _interactive_selection(self, models):
-        """Handle interactive model selection"""
+        """Handle interactive model selection with checkboxes"""
         console.print("[bold cyan]Select models for parallel processing[/bold cyan]")
-        console.print("[dim]Enter model numbers separated by spaces (e.g., 1 3 5 7)[/dim]")
-        console.print("[dim]Tip: Select 3-4 different models for best parallel performance[/dim]\n")
+        console.print("[dim]Use ↑↓ arrows to move, SPACE to select, ENTER to confirm[/dim]")
+        console.print("[dim]Tip: Select 3-4 different models for best parallel performance[/dim]")
 
-        # Get current parallel models
+        # Count and show free models
+        free_count = sum(1 for m in models if ':free' in m.get("id", "").lower())
+        if free_count > 0:
+            console.print(f"[green]💰 {free_count} free models available (shown first)[/green]\n")
+        else:
+            console.print()
+
+        # Get current parallel models to pre-select them
         current = self.config.get('ai.parallel_models', [])
         if current:
             console.print(f"[dim]Current parallel models: {len(current)}[/dim]")
@@ -238,47 +264,61 @@ class ModelsCommand:
                 console.print(f"  [dim]- {m}[/dim]")
             console.print()
 
-        # Prompt for selection
-        selection = Prompt.ask(
-            "[cyan]Enter model numbers[/cyan]",
-            default=""
-        )
+        # Create choices with formatted display
+        choices = []
+        for model in models:
+            backend = model.get("backend", "unknown")
+            tier = model.get("tier", "standard")
+            model_id = model.get("id", "unknown")
+            context = self._get_context_length(model)
 
-        if not selection.strip():
+            # Format: "groq flagship llama-3.3-70b-versatile 128k"
+            display = f"{backend:8} {tier:10} {model_id:40} {context:>6}"
+
+            # Build full model identifier with backend prefix (for saving to config)
+            # This ensures we can distinguish between groq/llama and anannas/llama
+            if backend == "groq":
+                full_model_id = model_id  # Groq is default, no prefix needed
+            else:
+                full_model_id = f"{backend}/{model_id}"
+
+            # Check if this model is currently selected
+            # Support both old format (no prefix) and new format (with prefix)
+            is_selected = full_model_id in current or model_id in current
+
+            choices.append(questionary.Choice(
+                title=display,
+                value=full_model_id,
+                checked=is_selected
+            ))
+
+        # Show checkbox selection
+        selected_models = questionary.checkbox(
+            "Select models:",
+            choices=choices,
+            style=questionary.Style([
+                ('checkbox-selected', 'fg:#00ff00 bold'),  # Green for selected
+                ('checkbox', 'fg:#858585'),                # Gray for unselected
+                ('selected', 'bg:#0080ff fg:#ffffff'),     # Blue background for cursor
+                ('pointer', 'fg:#00ff00 bold'),            # Green pointer
+            ])
+        ).ask()
+
+        if not selected_models:
             console.print("[yellow]No models selected, keeping current config[/yellow]")
             return
 
-        # Parse selection
-        try:
-            indices = [int(x.strip()) for x in selection.split()]
-            selected_models = []
+        # Show selection summary
+        console.print(f"\n[green]Selected {len(selected_models)} models:[/green]")
+        for model in selected_models:
+            console.print(f"  [cyan]✓[/cyan] {model}")
+        console.print()
 
-            for idx in indices:
-                if 1 <= idx <= len(models):
-                    model_id = models[idx - 1].get("id")
-                    selected_models.append(model_id)
-                else:
-                    console.print(f"[yellow]Warning: Index {idx} out of range, skipping[/yellow]")
-
-            if not selected_models:
-                console.print("[red]No valid models selected[/red]")
-                return
-
-            # Show selection
-            console.print(f"\n[green]Selected {len(selected_models)} models:[/green]")
-            for model in selected_models:
-                console.print(f"  [cyan]✓[/cyan] {model}")
-            console.print()
-
-            # Confirm update
-            if Confirm.ask("Update .gai.yaml with these models?", default=True):
-                self._update_config(selected_models)
-            else:
-                console.print("[yellow]Config not updated[/yellow]")
-
-        except ValueError as e:
-            console.print(f"[red]Invalid input: {e}[/red]")
-            console.print("[dim]Please enter numbers separated by spaces[/dim]")
+        # Confirm update
+        if Confirm.ask("Update .gai.yaml with these models?", default=True):
+            self._update_config(selected_models)
+        else:
+            console.print("[yellow]Config not updated[/yellow]")
 
     def _update_config(self, models):
         """Update .gai.yaml with selected models"""
