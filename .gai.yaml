@@ -1,0 +1,46 @@
+ai:
+  api_url: https://api.groq.com/openai/v1/chat/completions
+  model: llama-3.3-70b-versatile
+  max_tokens: 30000
+  parallel_models:
+  - groq/compound
+  - groq/compound-mini
+  - llama-3.3-70b-versatile
+  - meta-llama/llama-4-maverick-17b-128e-instruct
+  - meta-llama/llama-4-scout-17b-16e-instruct
+  - moonshotai/kimi-k2-instruct
+  - moonshotai/kimi-k2-instruct-0905
+  - openai/gpt-oss-120b
+  - openai/gpt-oss-20b
+  - qwen/qwen3-32b
+  fallback_models: []
+  temperature: 0.3
+commit:
+  format: conventional
+  auto_confirm: false
+  scope_detection: true
+  issue_detection: true
+  breaking_changes: false
+  multi_line: true
+  max_diff_tokens: 25000
+review_merge:
+  check_conflicts: true
+  show_stats: true
+  suggest_actions: true
+  analyze_breaking_changes: true
+  max_commits_to_analyze: 50
+  max_tokens: 25000
+diff:
+  summary_style: detailed
+  show_file_stats: true
+  detect_patterns: true
+  max_files_to_analyze: 100
+  max_tokens: 25000
+general:
+  language: en
+  verbose: false
+  stats_tracking: true
+stats:
+  use_db: true
+  backend: sqlite
+  db_path: null
