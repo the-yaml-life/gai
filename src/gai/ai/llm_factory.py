@@ -35,13 +35,61 @@ def create_client(model: str, config: Config, verbose: bool = False):
     Returns:
         Either GroqClient, OllamaClient, or AnannasClient instance
     """
-    if model.startswith("ollama/"):
-        # Ollama model
+    if model.startswith("ollama."):
+        # Ollama model with explicit endpoint: ollama.gpu1/llama3.3:70b
+        parts = model.split("/", 1)
+        if len(parts) != 2:
+            raise ValueError(
+                f"Invalid ollama model format: '{model}'. "
+                f"Expected: ollama.endpoint/model (e.g., ollama.gpu1/llama3.3:70b)"
+            )
+
+        endpoint_part = parts[0]  # "ollama.gpu1"
+        model_name = parts[1]      # "llama3.3:70b"
+
+        # Extract endpoint name: "gpu1"
+        endpoint_name = endpoint_part.replace("ollama.", "", 1)
+
+        # Get endpoints config
+        endpoints = config.get('ollama.endpoints', {})
+        if not endpoints:
+            raise ValueError(
+                f"No Ollama endpoints configured. Add 'ollama.endpoints' section to .gai.yaml"
+            )
+
+        if endpoint_name not in endpoints:
+            available = list(endpoints.keys())
+            raise ValueError(
+                f"Ollama endpoint '{endpoint_name}' not found in config. "
+                f"Available endpoints: {available}"
+            )
+
+        endpoint_url = endpoints[endpoint_name]
+
+        return OllamaClient(
+            model=f"ollama/{model_name}",  # Strip endpoint prefix for OllamaClient
+            temperature=config.get('ai.temperature', 0.3),
+            verbose=verbose,
+            base_url=endpoint_url
+        )
+    elif model.startswith("ollama/"):
+        # Backward compatibility: ollama/model uses default endpoint
+        # Priority: 1) ollama.base_url, 2) first endpoint in ollama.endpoints, 3) localhost
+        default_url = config.get('ollama.base_url')
+
+        if not default_url:
+            # Try first endpoint from endpoints dict
+            endpoints = config.get('ollama.endpoints', {})
+            if endpoints:
+                default_url = list(endpoints.values())[0]
+            else:
+                default_url = 'http://localhost:11434'
+
         return OllamaClient(
             model=model,
             temperature=config.get('ai.temperature', 0.3),
             verbose=verbose,
-            base_url=config.get('ollama.base_url', 'http://localhost:11434')
+            base_url=default_url
         )
     elif model.startswith("anannas/"):
         # Anannas model
@@ -396,12 +444,52 @@ class MultiBackendClient:
         except Exception as e:
             self._log(f"Failed to list Anannas models: {e}")
 
-        # List Ollama models
+        # List Ollama models from all endpoints
         try:
-            ollama_client = create_client("ollama/dummy", self.config, verbose=False)
-            ollama_models = ollama_client.list_models(raw=raw)
-            if ollama_models:
-                all_models['ollama'] = ollama_models
+            endpoints = self.config.get('ollama.endpoints', {})
+
+            if endpoints:
+                # Multiple endpoints configured - list each separately
+                for endpoint_name, endpoint_url in endpoints.items():
+                    try:
+                        # Create client for this specific endpoint
+                        from gai.ai.ollama_client import OllamaClient
+                        endpoint_client = OllamaClient(
+                            model="dummy",
+                            temperature=0.3,
+                            verbose=False,
+                            base_url=endpoint_url
+                        )
+
+                        endpoint_models = endpoint_client.list_models(raw=raw)
+
+                        if endpoint_models:
+                            # Rewrite model IDs to include endpoint prefix
+                            for model in endpoint_models:
+                                original_id = model.get('id', '')
+                                # Replace "ollama/" with "ollama.endpoint/"
+                                if original_id.startswith('ollama/'):
+                                    model['id'] = original_id.replace('ollama/', f'ollama.{endpoint_name}/', 1)
+                                else:
+                                    model['id'] = f"ollama.{endpoint_name}/{original_id}"
+
+                                # Add endpoint info to model metadata
+                                model['endpoint'] = endpoint_name
+                                model['endpoint_url'] = endpoint_url
+
+                            # Store under endpoint-specific key
+                            all_models[f'ollama.{endpoint_name}'] = endpoint_models
+
+                    except Exception as endpoint_error:
+                        self._log(f"Failed to list Ollama models from {endpoint_name} ({endpoint_url}): {endpoint_error}")
+
+            else:
+                # No endpoints config - fall back to single base_url (backward compatibility)
+                ollama_client = create_client("ollama/dummy", self.config, verbose=False)
+                ollama_models = ollama_client.list_models(raw=raw)
+                if ollama_models:
+                    all_models['ollama'] = ollama_models
+
         except Exception as e:
             self._log(f"Failed to list Ollama models: {e}")
 

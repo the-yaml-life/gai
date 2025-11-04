@@ -28,6 +28,11 @@ ai:
   - openai/gpt-oss-120b
   - openai/gpt-oss-20b
   - openai/gpt-oss-safeguard-20b
+  - ollama.remote/ollama.remote/deepseek-r1:1.5b
+  - ollama.remote/ollama.remote/deepseek-r1:8b
+  - ollama.remote/ollama.remote/gemma3:1b
+  - ollama.remote/ollama.remote/gemma3:4b
+  - ollama.remote/ollama.remote/qwen2.5vl:7b
   fallback_models: []
   temperature: 0.3
 commit:
@@ -67,5 +72,8 @@ models:
   - distil-whisper
 ollama:
   base_url: http://localhost:11434
+  endpoints:
+    local: http://localhost:11434
+    remote: https://ollama.int.the.yaml.life
 anannas:
   api_url: https://api.anannas.ai/v1/chat/completions
