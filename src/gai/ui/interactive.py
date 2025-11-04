@@ -181,6 +181,7 @@ def edit_text(text: str, extension: str = "txt") -> Optional[str]:
 def select_option(options: list[tuple[str, str]], prompt: str = "Select:") -> Optional[str]:
     """
     Let user select from options with single keypress.
+    Accepts both letter keys and numbers (1-indexed).
 
     Args:
         options: List of (key, description) tuples
@@ -190,8 +191,12 @@ def select_option(options: list[tuple[str, str]], prompt: str = "Select:") -> Op
         Selected key or None
     """
     console.print()
-    for key, desc in options:
-        console.print(f"  [cyan]{key}[/cyan]: {desc}")
+
+    # Create number-to-key mapping
+    number_map = {}
+    for idx, (key, desc) in enumerate(options, start=1):
+        number_map[str(idx)] = key
+        console.print(f"  {idx}) [cyan]{key}[/cyan]: {desc}")
     console.print()
 
     valid_keys = [k for k, _ in options]
@@ -212,7 +217,13 @@ def select_option(options: list[tuple[str, str]], prompt: str = "Select:") -> Op
                 console.print()
                 return None
 
-            # Check if valid option (case insensitive)
+            # Check if number was pressed
+            if char in number_map:
+                selected_key = number_map[char]
+                console.print(f"[bold cyan]{char} ({selected_key})[/bold cyan]")
+                return selected_key
+
+            # Check if valid letter key (case insensitive)
             if char.lower() in valid_keys:
                 console.print(f"[bold cyan]{char.lower()}[/bold cyan]")
                 return char.lower()
