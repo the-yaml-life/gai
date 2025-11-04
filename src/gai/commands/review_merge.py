@@ -6,7 +6,7 @@ from gai.core.git import Git, GitError
 from gai.core.config import Config
 from gai.core.tokens import estimate_tokens, chunk_by_files
 from gai.core.stats import get_stats
-from gai.ai.groq_client import GroqClient, GroqError
+from gai.ai.llm_factory import MultiBackendClient, LLMError
 from gai.ai.prompts import Prompts
 from gai.ui.interactive import (
     show_merge_analysis,
@@ -31,14 +31,10 @@ class ReviewMergeCommand:
         self.git = git
         self.verbose = verbose
 
-        # Initialize AI client
-        self.client = GroqClient(
-            api_key=config.api_key,
-            model=config.get('ai.model'),
-            fallback_models=config.get('ai.fallback_models', []),
-            temperature=config.get('ai.temperature', 0.3),
-            verbose=verbose,
-            api_url=config.get('ai.api_url', 'https://api.groq.com/openai/v1/chat/completions')
+        # Initialize AI client (multi-backend support)
+        self.client = MultiBackendClient(
+            config=config,
+            verbose=verbose
         )
 
     def run(self, base_branch: str, show_verbose: bool = False):
@@ -152,7 +148,7 @@ class ReviewMergeCommand:
 
         except GitError as e:
             show_error(f"Git error: {e}")
-        except GroqError as e:
+        except LLMError as e:
             show_error(f"AI analysis failed: {e}")
             if self.verbose:
                 import traceback

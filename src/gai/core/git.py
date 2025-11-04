@@ -181,3 +181,91 @@ class Git:
 
         result = self._run("push", remote, branch)
         return result.returncode == 0
+
+    def get_status_full(self) -> str:
+        """Get full git status output (human readable)"""
+        result = self._run("status")
+        return result.stdout
+
+    def get_divergence_info(self, remote: str = "origin") -> dict:
+        """
+        Get divergence information between local and remote branch.
+
+        Returns dict with:
+            - diverged: bool
+            - ahead: int (commits ahead)
+            - behind: int (commits behind)
+            - ahead_commits: list of commit hashes
+            - behind_commits: list of commit hashes
+            - remote_exists: bool
+        """
+        branch = self.get_current_branch()
+        remote_branch = f"{remote}/{branch}"
+
+        # Check if remote branch exists
+        result = self._run("rev-parse", "--verify", remote_branch, check=False)
+        if result.returncode != 0:
+            return {
+                'diverged': False,
+                'ahead': 0,
+                'behind': 0,
+                'ahead_commits': [],
+                'behind_commits': [],
+                'remote_exists': False
+            }
+
+        # Get commits ahead
+        result_ahead = self._run("rev-list", f"{remote_branch}..{branch}")
+        ahead_commits = [c for c in result_ahead.stdout.strip().split('\n') if c]
+
+        # Get commits behind
+        result_behind = self._run("rev-list", f"{branch}..{remote_branch}")
+        behind_commits = [c for c in result_behind.stdout.strip().split('\n') if c]
+
+        ahead = len(ahead_commits)
+        behind = len(behind_commits)
+
+        return {
+            'diverged': ahead > 0 and behind > 0,
+            'ahead': ahead,
+            'behind': behind,
+            'ahead_commits': ahead_commits,
+            'behind_commits': behind_commits,
+            'remote_exists': True
+        }
+
+    def get_commit_summary(self, commit_hash: str) -> str:
+        """Get one-line commit summary"""
+        result = self._run("log", "-1", "--oneline", commit_hash)
+        return result.stdout.strip()
+
+    def has_uncommitted_changes(self) -> bool:
+        """Check if there are uncommitted changes"""
+        status = self.get_status()
+        return bool(status.strip())
+
+    def pull_rebase(self, remote: str = "origin", branch: Optional[str] = None) -> bool:
+        """Pull with rebase"""
+        if branch is None:
+            branch = self.get_current_branch()
+
+        result = self._run("pull", "--rebase", remote, branch)
+        return result.returncode == 0
+
+    def pull_merge(self, remote: str = "origin", branch: Optional[str] = None) -> bool:
+        """Pull with merge"""
+        if branch is None:
+            branch = self.get_current_branch()
+
+        result = self._run("pull", "--no-rebase", remote, branch)
+        return result.returncode == 0
+
+    def reset_hard(self, target: str) -> bool:
+        """Reset hard to target"""
+        result = self._run("reset", "--hard", target)
+        return result.returncode == 0
+
+    def fetch(self, remote: str = "origin") -> bool:
+        """Fetch from remote"""
+        result = self._run("fetch", remote)
+        return result.returncode == 0

@@ -242,8 +242,11 @@ def config_show(ctx):
 
 @cli.command()
 @click.option('--select', '-s', is_flag=True, help='Interactively select parallel models')
+@click.option('--tier', type=str, help='Filter by tier if API provides it (e.g., flagship, fast, light, reasoning)')
+@click.option('--debug', is_flag=True, help='Show raw API response for debugging')
+@click.option('--backend', type=str, help='Show models from specific backend only (groq, anannas, ollama)')
 @click.pass_context
-def models(ctx, select):
+def models(ctx, select, tier, debug, backend):
     """List available models from API"""
     from gai.commands.models import ModelsCommand
 
@@ -253,7 +256,69 @@ def models(ctx, select):
         verbose=verbose
     )
 
-    cmd.run(select=select)
+    cmd.run(select=select, filter_tier=tier, debug=debug, filter_backend=backend)
+
+
+@cli.command()
+@click.pass_context
+def debug(ctx):
+    """Explain git problems without fixing them"""
+    from gai.commands.debug import DebugCommand
+
+    verbose = ctx.obj['config'].get('general.verbose', False)
+    cmd = DebugCommand(
+        config=ctx.obj['config'],
+        git=ctx.obj['git'],
+        verbose=verbose
+    )
+
+    cmd.run()
+
+
+@cli.command()
+@click.option('--auto', is_flag=True, help='Automatically apply AI suggestions')
+@click.pass_context
+def resolve(ctx, auto):
+    """Resolve merge conflicts with AI assistance"""
+    from gai.commands.resolve import ResolveCommand
+
+    verbose = ctx.obj['config'].get('general.verbose', False)
+    cmd = ResolveCommand(
+        config=ctx.obj['config'],
+        git=ctx.obj['git'],
+        verbose=verbose
+    )
+
+    cmd.run(auto=auto)
+
+
+@cli.command()
+@click.option('--rebase', is_flag=True, help='Rebase local commits on top of remote')
+@click.option('--merge', is_flag=True, help='Merge remote changes with local')
+@click.option('--reset', is_flag=True, help='Reset to match remote (DANGEROUS)')
+@click.option('--pull', is_flag=True, help='Simple pull (when just behind)')
+@click.option('--auto', is_flag=True, help='Automatically choose best solution')
+@click.option('--force', '-f', is_flag=True, help='Skip confirmation prompts')
+@click.pass_context
+def fix(ctx, rebase, merge, reset, pull, auto, force):
+    """Fix git problems automatically"""
+    from gai.commands.fix import FixCommand
+
+    verbose = ctx.obj['config'].get('general.verbose', False)
+    cmd = FixCommand(
+        config=ctx.obj['config'],
+        git=ctx.obj['git'],
+        verbose=verbose
+    )
+
+    cmd.run(
+        rebase=rebase,
+        merge=merge,
+        reset=reset,
+        pull=pull,
+        auto=auto,
+        force=force
+    )
 
 
 @cli.command()

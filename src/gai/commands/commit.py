@@ -6,7 +6,7 @@ from gai.core.git import Git, GitError
 from gai.core.config import Config
 from gai.core.tokens import estimate_tokens, chunk_by_files
 from gai.core.stats import get_stats
-from gai.ai.groq_client import GroqClient, GroqError
+from gai.ai.llm_factory import MultiBackendClient, LLMError
 from gai.ai.prompts import Prompts
 from gai.ui.interactive import (
     show_commit_message,
@@ -29,15 +29,30 @@ class CommitCommand:
         self.git = git
         self.verbose = verbose
 
-        # Initialize AI client
-        self.client = GroqClient(
-            api_key=config.api_key,
-            model=config.get('ai.model'),
-            fallback_models=config.get('ai.fallback_models', []),
-            temperature=config.get('ai.temperature', 0.3),
-            verbose=verbose,
-            api_url=config.get('ai.api_url', 'https://api.groq.com/openai/v1/chat/completions')
+        # Initialize AI client (multi-backend support)
+        self.client = MultiBackendClient(
+            config=config,
+            verbose=verbose
         )
+
+    def _get_model_token_limit(self, model: str) -> int:
+        """
+        Get TPM (tokens per minute) limit for a model.
+
+        Args:
+            model: Model name (with or without backend prefix)
+
+        Returns:
+            Token limit per minute for the model
+        """
+        # Import here to avoid circular dependency
+        from gai.ai.rate_limiter import RateLimiter
+
+        # Strip backend prefixes
+        clean_model = model.replace("groq/", "").replace("ollama/", "").replace("anannas/", "")
+
+        # Get limit from RateLimiter's MODEL_LIMITS
+        return RateLimiter.MODEL_LIMITS.get(clean_model, 30_000)
 
     def run(
         self,
@@ -150,6 +165,60 @@ class CommitCommand:
                         diff_stat=diff_stat,
                         max_tokens=max_tokens
                     )
+
+                    # Validate sampled diff fits in model's token limit
+                    sampled_tokens = estimate_tokens(diff)
+                    primary_model = self.config.get('ai.model')
+                    model_limit = self._get_model_token_limit(primary_model)
+
+                    if self.verbose:
+                        show_info(f"Sampled diff: {sampled_tokens:,} tokens (model limit: {model_limit:,})")
+
+                    # Check if sampled diff still exceeds model limit
+                    if sampled_tokens > model_limit:
+                        show_warning(f"Even with sampling, diff is {sampled_tokens:,} tokens (model limit: {model_limit:,})")
+
+                        # Try automatic fallback to parallel processing if configured
+                        if len(parallel_models) >= 2:
+                            show_info(f"Automatically using {len(parallel_models)} models in parallel...")
+
+                            # Use parallel processing
+                            message = self._generate_parallel_commit(
+                                diff=diff,
+                                diff_stat=diff_stat,
+                                status=status,
+                                max_tokens=model_limit,
+                                parallel_models=parallel_models
+                            )
+
+                            # Interactive confirmation
+                            if not dry_run:
+                                should_commit, final_message, should_push = commit_confirm(message, allow_edit=True)
+                                if should_commit and final_message:
+                                    scope = Detection.detect_scope([line.split()[1] for line in status.split('\n') if line.strip()])
+                                    commit_type = "feat"
+                                    get_stats().record_commit(commit_type, scope)
+
+                                    self.git.commit(final_message)
+                                    show_success("Commit created!")
+
+                                    if should_push:
+                                        self._do_push()
+                                else:
+                                    show_info("Commit aborted")
+                            else:
+                                show_commit_message(message)
+
+                            return
+                        else:
+                            # No parallel models configured - fail with clear message
+                            show_error(f"Diff too large even with sampling ({sampled_tokens:,} tokens > {model_limit:,} limit)")
+                            show_info("Solutions:")
+                            show_info("  1. Make smaller commits")
+                            show_info("  2. Configure ai.parallel_models in .gai.yaml")
+                            show_info("  3. Use a model with higher token limit")
+                            return
+
                 else:
                     show_info("Aborted. Consider making smaller commits.")
                     return
@@ -241,7 +310,7 @@ class CommitCommand:
                     success=False,
                     error_message=str(e)
                 )
-        except GroqError as e:
+        except LLMError as e:
             show_error(f"AI generation failed: {e}")
             show_info("Opening editor for manual commit message...")
 

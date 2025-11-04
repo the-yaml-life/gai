@@ -5,7 +5,7 @@ List available models command
 import yaml
 from pathlib import Path
 from gai.core.config import Config
-from gai.ai.groq_client import GroqClient
+from gai.ai.llm_factory import MultiBackendClient
 from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt, Confirm
@@ -20,62 +20,120 @@ class ModelsCommand:
         self.config = config
         self.verbose = verbose
 
-        # Initialize AI client
-        self.client = GroqClient(
-            api_key=config.api_key,
-            model=config.get('ai.model'),
-            fallback_models=[],
-            temperature=0.3,
-            verbose=verbose,
-            api_url=config.get('ai.api_url', 'https://api.groq.com/openai/v1/chat/completions')
+        # Initialize multi-backend client
+        self.client = MultiBackendClient(
+            config=config,
+            verbose=verbose
         )
 
-    def run(self, select=False):
+    def run(self, select=False, filter_tier=None, debug=False, filter_backend=None):
         """
-        List available models.
+        List available models from all backends.
 
         Args:
             select: If True, allow interactive selection to update config
+            filter_tier: Filter by specific tier if API provides it (e.g., flagship, fast, light, reasoning)
+            debug: If True, show raw API response for debugging
+            filter_backend: Filter by specific backend (groq, anannas, ollama)
         """
-        console.print("\n[bold cyan]Fetching available models...[/bold cyan]\n")
+        console.print("\n[bold cyan]Fetching available models from all backends...[/bold cyan]\n")
 
-        all_models = self.client.list_models()
+        # Get models from all backends (raw if debug mode)
+        all_backends = self.client.list_models(raw=debug)
 
-        if not all_models:
+        if not all_backends:
             console.print("[yellow]No models found or API error[/yellow]")
             return
 
-        # Filter for text generation models only
+        # Debug mode: show raw response
+        if debug:
+            import json
+            console.print("[bold yellow]DEBUG MODE - Raw API Responses:[/bold yellow]\n")
+            console.print("[dim]Use this to see what fields the API actually returns[/dim]\n")
+            for backend, models in all_backends.items():
+                if filter_backend and backend != filter_backend:
+                    continue
+                console.print(f"[bold cyan]{backend.upper()} Backend:[/bold cyan]")
+                console.print(f"[dim]Total models: {len(models)}[/dim]")
+                if models:
+                    console.print("\n[yellow]First model example (raw fields):[/yellow]")
+                    console.print(json.dumps(models[0], indent=2))
+                    console.print("\n[yellow]All unique fields across all models:[/yellow]")
+                    all_fields = set()
+                    for m in models:
+                        all_fields.update(m.keys())
+                    console.print(f"Fields: {sorted(all_fields)}")
+                console.print("\n" + "="*60 + "\n")
+            return
+
+        # Flatten and filter for text generation models
+        all_models = []
+        for backend, models in all_backends.items():
+            # Filter by backend if requested
+            if filter_backend and backend != filter_backend:
+                continue
+            for model in models:
+                model['backend'] = backend
+                all_models.append(model)
+
         models = self._filter_text_models(all_models)
 
         if not models:
             console.print("[yellow]No text models found[/yellow]")
             return
 
+        # Filter by tier if requested (only if API provides tier field)
+        if filter_tier:
+            models = [m for m in models if m.get("tier", "").lower() == filter_tier.lower()]
+            console.print(f"[dim]Filtering by tier: {filter_tier}[/dim]\n")
+
+            if not models:
+                console.print(f"[yellow]No models found for tier: {filter_tier}[/yellow]")
+                console.print(f"[dim]Note: Tier filtering only works if the API provides tier metadata[/dim]")
+                return
+
         # Create table with index column for selection
         table = Table(show_header=True, header_style="bold magenta")
         if select:
             table.add_column("#", style="dim", width=4)
-        table.add_column("Model ID", style="cyan", width=45)
+        table.add_column("Backend", style="magenta", width=8)
+        table.add_column("Tier", style="green", width=10)
+        table.add_column("Model ID", style="cyan", width=40)
         table.add_column("Context", style="yellow", justify="right", width=10)
-        table.add_column("Owner", style="green", width=15)
 
         for idx, model in enumerate(models, 1):
+            backend = model.get("backend", "unknown")
+            tier = model.get("tier", "standard")
             model_id = model.get("id", "unknown")
-            owner = model.get("owned_by", "unknown")
             context = self._get_context_length(model)
 
+            # Color code tier
+            tier_colored = self._format_tier(tier)
+
             if select:
-                table.add_row(str(idx), model_id, context, owner)
+                table.add_row(str(idx), backend, tier_colored, model_id, context)
             else:
-                table.add_row(model_id, context, owner)
+                table.add_row(backend, tier_colored, model_id, context)
 
         console.print(table)
         console.print(f"\n[dim]Total: {len(models)} text models[/dim]")
 
-        if len(all_models) > len(models):
-            filtered = len(all_models) - len(models)
-            console.print(f"[dim]Filtered out {filtered} non-text models (whisper, tts, etc)[/dim]")
+        # Show count per backend
+        backend_counts = {}
+        tier_counts = {}
+        for model in models:
+            backend = model.get("backend", "unknown")
+            tier = model.get("tier", "standard")
+            backend_counts[backend] = backend_counts.get(backend, 0) + 1
+            tier_counts[tier] = tier_counts.get(tier, 0) + 1
+
+        for backend, count in backend_counts.items():
+            console.print(f"[dim]  {backend}: {count} models[/dim]")
+
+        console.print(f"\n[dim]By tier:[/dim]")
+        for tier, count in sorted(tier_counts.items()):
+            console.print(f"[dim]  {tier}: {count} models[/dim]")
+
         console.print()
 
         # Interactive selection
@@ -83,16 +141,20 @@ class ModelsCommand:
             self._interactive_selection(models)
 
     def _filter_text_models(self, models):
-        """Filter models to only include text generation models"""
+        """
+        Filter models to only include text generation models.
+
+        Uses config.models.exclude_keywords if configured, otherwise uses defaults.
+        """
         text_models = []
 
-        # Keywords that indicate non-text models
-        exclude_keywords = [
-            'whisper',      # Speech-to-text
-            'tts',          # Text-to-speech
-            'playai',       # TTS service
-            'distil-whisper',
-        ]
+        # Get exclude keywords from config or use defaults
+        exclude_keywords = self.config.get('models.exclude_keywords', [
+            'whisper',         # Speech-to-text
+            'tts',             # Text-to-speech
+            'playai',          # TTS service
+            'distil-whisper',  # Whisper variants
+        ])
 
         for model in models:
             model_id = model.get("id", "").lower()
@@ -105,6 +167,18 @@ class ModelsCommand:
 
         return text_models
 
+    def _format_tier(self, tier: str) -> str:
+        """Format tier with color coding"""
+        tier_colors = {
+            "local": "[bright_green]local[/bright_green]",
+            "flagship": "[magenta]flagship[/magenta]",
+            "fast": "[cyan]fast[/cyan]",
+            "light": "[yellow]light[/yellow]",
+            "reasoning": "[blue]reasoning[/blue]",
+            "standard": "[dim]standard[/dim]",
+        }
+        return tier_colors.get(tier.lower(), f"[dim]{tier}[/dim]")
+
     def _get_context_length(self, model):
         """Extract context length from model data or name"""
         model_id = model.get("id", "")
@@ -112,18 +186,26 @@ class ModelsCommand:
         # Check context_window field if available
         context_window = model.get("context_window")
         if context_window:
-            if context_window >= 100000:
+            if context_window >= 1000000:
+                return f"{context_window // 1000000}M"
+            elif context_window >= 1000:
                 return f"{context_window // 1000}k"
             else:
-                return f"{context_window // 1000}k"
+                return str(context_window)
 
         # Try to extract from model name
         model_lower = model_id.lower()
 
-        if "128k" in model_lower or "131072" in model_lower:
+        if "1m" in model_lower or "1000k" in model_lower:
+            return "1M"
+        elif "128k" in model_lower or "131072" in model_lower:
             return "128k"
+        elif "100k" in model_lower:
+            return "100k"
         elif "32k" in model_lower or "32768" in model_lower:
             return "32k"
+        elif "16k" in model_lower or "16384" in model_lower:
+            return "16k"
         elif "8k" in model_lower or "8192" in model_lower:
             return "8k"
         elif "4k" in model_lower or "4096" in model_lower:
@@ -135,7 +217,10 @@ class ModelsCommand:
         if match:
             num = int(match.group(1))
             if num > 1000:  # Likely token count, not model size
-                return f"{num // 1000}k"
+                if num >= 1000000:
+                    return f"{num // 1000000}M"
+                else:
+                    return f"{num // 1000}k"
 
         return "?"
 

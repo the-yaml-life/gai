@@ -7,9 +7,10 @@ from typing import Dict
 
 
 class RateLimiter:
-    """Track TPM usage per model"""
+    """Track TPM (tokens per minute) usage per model"""
 
-    # Model TPM limits (free tier)
+    # Default TPM limits for common models
+    # Note: These limits may change - check your API provider's documentation
     MODEL_LIMITS = {
         "meta-llama/llama-4-scout-17b-16e-instruct": 30_000,
         "llama-3.3-70b-versatile": 12_000,

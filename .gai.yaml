@@ -5,14 +5,18 @@ ai:
   parallel_models:
   - groq/compound
   - groq/compound-mini
+  - llama-3.1-8b-instant
   - llama-3.3-70b-versatile
   - meta-llama/llama-4-maverick-17b-128e-instruct
   - meta-llama/llama-4-scout-17b-16e-instruct
+  - meta-llama/llama-guard-4-12b
+  - meta-llama/llama-prompt-guard-2-22m
+  - meta-llama/llama-prompt-guard-2-86m
   - moonshotai/kimi-k2-instruct
   - moonshotai/kimi-k2-instruct-0905
   - openai/gpt-oss-120b
   - openai/gpt-oss-20b
-  - qwen/qwen3-32b
+  - openai/gpt-oss-safeguard-20b
   fallback_models: []
   temperature: 0.3
 commit:
@@ -44,3 +48,13 @@ stats:
   use_db: true
   backend: sqlite
   db_path: null
+models:
+  exclude_keywords:
+  - whisper
+  - tts
+  - playai
+  - distil-whisper
+ollama:
+  base_url: http://localhost:11434
+anannas:
+  api_url: https://api.anannas.ai/v1/chat/completions

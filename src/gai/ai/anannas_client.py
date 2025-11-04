@@ -1,5 +1,8 @@
 """
-Groq API client with rate limiting and fallback
+Anannas.ai API client with rate limiting and fallback
+
+Anannas provides a unified gateway to 500+ models from multiple providers
+through an OpenAI-compatible API.
 """
 
 import requests
@@ -12,20 +15,20 @@ from gai.core.tokens import estimate_tokens
 from gai.core.stats import get_stats
 
 
-class GroqError(Exception):
-    """Groq API error"""
+class AnannasError(Exception):
+    """Anannas API error"""
     pass
 
 
-class RateLimitError(GroqError):
+class RateLimitError(AnannasError):
     """Rate limit exceeded"""
     def __init__(self, message: str, wait_time: float):
         super().__init__(message)
         self.wait_time = wait_time
 
 
-class GroqClient:
-    """OpenAI-compatible API client with rate limiting and multi-model fallback"""
+class AnannasClient:
+    """OpenAI-compatible Anannas client with rate limiting and multi-model fallback"""
 
     def __init__(
         self,
@@ -35,7 +38,7 @@ class GroqClient:
         temperature: float = 0.3,
         max_retries: int = 3,
         verbose: bool = False,
-        api_url: str = "https://api.groq.com/openai/v1/chat/completions"
+        api_url: str = "https://api.anannas.ai/v1/chat/completions"
     ):
         self.api_key = api_key
         self.model = model
@@ -49,7 +52,7 @@ class GroqClient:
     def _log(self, message: str):
         """Log if verbose"""
         if self.verbose:
-            print(f"[GroqClient] {message}")
+            print(f"[AnannasClient] {message}")
 
     def _make_request(
         self,
@@ -122,7 +125,7 @@ class GroqClient:
             except:
                 error_msg = response.text or "Unknown error"
 
-            raise GroqError(f"API error ({response.status_code}): {error_msg}")
+            raise AnannasError(f"API error ({response.status_code}): {error_msg}")
 
     def generate(
         self,
@@ -146,7 +149,7 @@ class GroqClient:
             Generated text
 
         Raises:
-            GroqError: If all attempts fail
+            AnannasError: If all attempts fail
         """
         messages = []
 
@@ -194,7 +197,7 @@ class GroqClient:
                         last_error = e
                         break
 
-                except GroqError as e:
+                except AnannasError as e:
                     self._log(f"Error: {e}")
                     last_error = e
 
@@ -203,7 +206,7 @@ class GroqClient:
 
                 except Exception as e:
                     self._log(f"Unexpected error: {e}")
-                    last_error = GroqError(str(e))
+                    last_error = AnannasError(str(e))
                     break
 
             # If we got here without returning, try next model
@@ -211,7 +214,7 @@ class GroqClient:
                 self._log(f"Falling back to next model...")
 
         # All attempts failed
-        raise last_error or GroqError("All generation attempts failed")
+        raise last_error or AnannasError("All generation attempts failed")
 
     def get_usage_stats(self) -> Dict[str, Dict]:
         """Get current rate limit usage for all models"""
@@ -280,10 +283,10 @@ class GroqClient:
             List of generated texts (same order as prompts)
 
         Raises:
-            GroqError: If all models have rate limit > 10 minutes
+            AnannasError: If all models have rate limit > 10 minutes
         """
         if len(prompts) > len(models):
-            raise GroqError(f"Not enough models ({len(models)}) for prompts ({len(prompts)})")
+            raise AnannasError(f"Not enough models ({len(models)}) for prompts ({len(prompts)})")
 
         self._log(f"Parallel generation: {len(prompts)} prompts with {len(models)} models available")
 
@@ -307,7 +310,7 @@ class GroqClient:
 
                     if min_wait > MAX_WAIT_TIME:
                         # All models rate limited for > 10min, fail
-                        raise GroqError(
+                        raise AnannasError(
                             f"All {len(models)} models have rate limit > 10 minutes. "
                             f"Shortest wait: {min_wait/60:.1f}min"
                         )

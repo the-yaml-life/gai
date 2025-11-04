@@ -154,6 +154,20 @@ class Config:
                 "use_db": True,
                 "backend": "sqlite",
                 "db_path": None
+            },
+            "models": {
+                "exclude_keywords": [
+                    "whisper",
+                    "tts",
+                    "playai",
+                    "distil-whisper"
+                ]
+            },
+            "anannas": {
+                "api_url": "https://api.anannas.ai/v1/chat/completions"
+            },
+            "ollama": {
+                "base_url": "http://localhost:11434"
             }
         }
 
