@@ -14,8 +14,11 @@ env/
 dist/
 build/
 
-# Stats
+# Stats and Database
 .gai_stats.json
+*.db
+*.sqlite
+*.sqlite3
 
 # IDE
 .vscode/
