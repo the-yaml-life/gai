@@ -52,7 +52,7 @@ Repository = "https://github.com/yourusername/gai.git"
 Issues = "https://github.com/yourusername/gai/issues"
 
 [project.scripts]
-gai = "gai.gai:cli"
+gai = "gai.__main__:cli"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

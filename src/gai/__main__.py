@@ -6,12 +6,9 @@ AI-powered git commands for commit messages, merge previews, and more.
 """
 
 import click
+import os
 import sys
 from pathlib import Path
-
-# Add src to path for imports
-src_path = Path(__file__).parent / 'src'
-sys.path.insert(0, str(src_path))
 
 from gai.core.config import get_config
 from gai.core.git import Git, GitError
@@ -25,6 +22,10 @@ from gai.core.stats import get_stats
 def cli(ctx, verbose, config):
     """gai - Git AI Assistant"""
     ctx.ensure_object(dict)
+
+    # Init command doesn't need config validation
+    if ctx.invoked_subcommand == 'init':
+        return
 
     try:
         # Load config
@@ -253,6 +254,68 @@ def models(ctx, select):
     )
 
     cmd.run(select=select)
+
+
+@cli.command()
+@click.option('--force', '-f', is_flag=True, help='Overwrite existing config')
+def init(force):
+    """Initialize gai configuration in ~/.config/gai/"""
+    import shutil
+    from gai.core.config import Config
+
+    # Get user config directory
+    xdg_config = os.getenv('XDG_CONFIG_HOME')
+    if xdg_config:
+        config_dir = Path(xdg_config) / 'gai'
+    else:
+        config_dir = Path.home() / '.config' / 'gai'
+
+    config_file = config_dir / 'config.yaml'
+    env_file = config_dir / '.env'
+
+    # Check if already exists
+    if config_file.exists() and not force:
+        click.echo(f"Config already exists at {config_file}")
+        click.echo("Use --force to overwrite")
+        return
+
+    # Create directory
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy templates from package
+    package_dir = Path(__file__).parent.parent.parent
+    template_yaml = package_dir / '.gai.yaml'
+    template_env = package_dir / '.env.example'
+
+    # Copy config template
+    if template_yaml.exists():
+        shutil.copy(template_yaml, config_file)
+        click.echo(f"✓ Created config: {config_file}")
+    else:
+        # Create default config from code
+        cfg = Config._default_config(None)
+        import yaml
+        with open(config_file, 'w') as f:
+            yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+        click.echo(f"✓ Created default config: {config_file}")
+
+    # Copy .env template
+    if template_env.exists():
+        shutil.copy(template_env, env_file)
+        click.echo(f"✓ Created env template: {env_file}")
+    else:
+        # Create basic .env template
+        with open(env_file, 'w') as f:
+            f.write("GROQ_API_KEY=your-api-key-here\n")
+        click.echo(f"✓ Created env file: {env_file}")
+
+    click.echo()
+    click.echo("Next steps:")
+    click.echo(f"1. Edit {env_file} and add your GROQ_API_KEY")
+    click.echo(f"2. Optionally edit {config_file} to customize settings")
+    click.echo(f"3. Run 'gai commit' from any git repo")
+    click.echo()
+    click.echo(f"DB will be stored at: {config_dir / 'gai.db'}")
 
 
 if __name__ == '__main__':
