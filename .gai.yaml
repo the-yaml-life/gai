@@ -1,39 +1,10 @@
 ai:
   api_url: https://api.groq.com/openai/v1/chat/completions
-  model: llama-3.3-70b-versatile
   max_tokens: 30000
   parallel_models:
-  - anannas/google/gemini-2.0-flash-exp:free
-  - anannas/google/gemma-2-9b-it:free
-  - anannas/google/gemma-3-12b-it:free
-  - anannas/google/gemma-3-27b-it:free
-  - anannas/google/gemma-3-4b-it:free
-  - anannas/huggingfaceh4/zephyr-7b-beta:free
-  - anannas/microsoft/phi-3-mini-128k-instruct:free
-  - anannas/meta-llama/llama-guard-4-12b
-  - anannas/moonshotai/kimi-k2-instruct
-  - anannas/openai/gpt-oss-120b
-  - anannas/openai/gpt-oss-20b
-  - groq/compound
-  - groq/compound-mini
-  - llama-3.1-8b-instant
-  - llama-3.3-70b-versatile
-  - meta-llama/llama-4-maverick-17b-128e-instruct
-  - meta-llama/llama-4-scout-17b-16e-instruct
-  - meta-llama/llama-guard-4-12b
-  - meta-llama/llama-prompt-guard-2-22m
-  - meta-llama/llama-prompt-guard-2-86m
-  - moonshotai/kimi-k2-instruct
-  - moonshotai/kimi-k2-instruct-0905
-  - openai/gpt-oss-120b
-  - openai/gpt-oss-20b
-  - openai/gpt-oss-safeguard-20b
-  - ollama.remote/ollama.remote/deepseek-r1:1.5b
-  - ollama.remote/ollama.remote/deepseek-r1:8b
-  - ollama.remote/ollama.remote/gemma3:1b
-  - ollama.remote/ollama.remote/gemma3:4b
-  - ollama.remote/ollama.remote/qwen2.5vl:7b
-  fallback_models: []
+  - openrouter/deepseek/deepseek-chat-v3-0324:free
+  - openrouter/deepseek/deepseek-chat-v3.1:free
+  - openrouter/deepseek/deepseek-r1-0528-qwen3-8b:free
   temperature: 0.3
 commit:
   format: conventional
@@ -77,3 +48,5 @@ ollama:
     remote: https://ollama.int.the.yaml.life
 anannas:
   api_url: https://api.anannas.ai/v1/chat/completions
+openrouter:
+  api_url: https://openrouter.ai/api/v1/chat/completions

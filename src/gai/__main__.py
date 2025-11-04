@@ -241,14 +241,15 @@ def config_show(ctx):
 
 
 @cli.command()
-@click.option('--select', '-s', is_flag=True, help='Interactively select parallel models')
+@click.option('--edit', '-e', is_flag=True, help='Interactively edit parallel models selection')
+@click.option('--select', '-s', is_flag=True, hidden=True, help='DEPRECATED: use --edit instead')
 @click.option('--tier', type=str, help='Filter by tier if API provides it (e.g., flagship, fast, light, reasoning)')
 @click.option('--debug', is_flag=True, help='Show raw API response for debugging')
-@click.option('--backend', type=str, help='Show models from specific backend only (groq, anannas, ollama)')
+@click.option('--backend', type=str, help='Show models from specific backend only (groq, anannas, ollama, openrouter)')
 @click.option('--free', is_flag=True, help='Show only free models (those with :free suffix)')
 @click.pass_context
-def models(ctx, select, tier, debug, backend, free):
-    """List available models from API"""
+def models(ctx, edit, select, tier, debug, backend, free):
+    """List configured models (or all available with filters)"""
     from gai.commands.models import ModelsCommand
 
     verbose = ctx.obj['config'].get('general.verbose', False)
@@ -257,7 +258,7 @@ def models(ctx, select, tier, debug, backend, free):
         verbose=verbose
     )
 
-    cmd.run(select=select, filter_tier=tier, debug=debug, filter_backend=backend, filter_free=free)
+    cmd.run(edit=edit, select=select, filter_tier=tier, debug=debug, filter_backend=backend, filter_free=free)
 
 
 @cli.command()

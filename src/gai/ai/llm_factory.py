@@ -9,6 +9,7 @@ import time
 from gai.ai.groq_client import GroqClient, GroqError
 from gai.ai.ollama_client import OllamaClient, OllamaError
 from gai.ai.anannas_client import AnannasClient, AnannasError
+from gai.ai.openrouter_client import OpenRouterClient, OpenRouterError
 from gai.core.config import Config
 
 
@@ -108,6 +109,28 @@ def create_client(model: str, config: Config, verbose: bool = False):
             verbose=verbose,
             api_url=config.get('anannas.api_url', 'https://api.anannas.ai/v1/chat/completions')
         )
+    elif model.startswith("openrouter/"):
+        # OpenRouter model
+        # Strip "openrouter/" prefix for the actual model name
+        openrouter_model = model.replace("openrouter/", "", 1)
+
+        # Get API key from env (separate from Groq key)
+        import os
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "OPENROUTER_API_KEY environment variable not set. "
+                "Get your key at https://openrouter.ai/keys"
+            )
+
+        return OpenRouterClient(
+            api_key=api_key,
+            model=openrouter_model,
+            fallback_models=config.get('ai.fallback_models', []),
+            temperature=config.get('ai.temperature', 0.3),
+            verbose=verbose,
+            api_url=config.get('openrouter.api_url', 'https://openrouter.ai/api/v1/chat/completions')
+        )
     else:
         # Groq model (default)
         # Strip "groq/" prefix if present
@@ -135,8 +158,17 @@ class MultiBackendClient:
         # Parallel models for multi-model generation
         self.parallel_models = config.get('ai.parallel_models', [])
 
-        # Primary model
-        primary_model = config.get('ai.model')
+        # Primary model (optional, deprecated)
+        primary_model = config.get('ai.model', None)
+
+        # If no primary model, use first parallel model as primary
+        if not primary_model and self.parallel_models:
+            primary_model = self.parallel_models[0]
+
+        if not primary_model:
+            raise ValueError(
+                "No models configured. Please set 'ai.parallel_models' in .gai.yaml or run 'gai models --edit'"
+            )
 
         # Create primary client with parallel_models as fallback
         # This enables automatic fallback when primary hits rate limit
@@ -238,7 +270,7 @@ class MultiBackendClient:
                 temperature=temperature,
                 retry_with_fallback=False  # Don't retry within same client
             )
-        except (GroqError, OllamaError, AnannasError) as e:
+        except (GroqError, OllamaError, AnannasError, OpenRouterError) as e:
             self._log(f"Primary model failed: {e}")
 
             # If fallback is disabled, raise immediately
@@ -375,7 +407,7 @@ class MultiBackendClient:
                     self._log(f"[{idx}] ✓ Complete with {model}")
                     return (idx, result, True)
 
-                except (GroqError, OllamaError, AnannasError) as e:
+                except (GroqError, OllamaError, AnannasError, OpenRouterError) as e:
                     self._log(f"[{idx}] Error with {model}: {e}")
                     return (idx, "", False)
                 except Exception as e:
@@ -443,6 +475,17 @@ class MultiBackendClient:
                     all_models['anannas'] = anannas_models
         except Exception as e:
             self._log(f"Failed to list Anannas models: {e}")
+
+        # List OpenRouter models (only if API key is set)
+        try:
+            import os
+            if os.getenv("OPENROUTER_API_KEY"):
+                openrouter_client = create_client("openrouter/dummy", self.config, verbose=False)
+                openrouter_models = openrouter_client.list_models(raw=raw)
+                if openrouter_models:
+                    all_models['openrouter'] = openrouter_models
+        except Exception as e:
+            self._log(f"Failed to list OpenRouter models: {e}")
 
         # List Ollama models from all endpoints
         try:

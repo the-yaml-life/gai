@@ -6,7 +6,7 @@ from gai.core.git import Git, GitError
 from gai.core.config import Config
 from gai.core.tokens import estimate_tokens, chunk_by_files
 from gai.core.stats import get_stats
-from gai.ai.llm_factory import MultiBackendClient, LLMError
+from gai.inference import get_inference_engine, InferenceRequest, InferenceError
 from gai.ai.prompts import Prompts
 from gai.ui.interactive import (
     show_commit_message,
@@ -29,11 +29,8 @@ class CommitCommand:
         self.git = git
         self.verbose = verbose
 
-        # Initialize AI client (multi-backend support)
-        self.client = MultiBackendClient(
-            config=config,
-            verbose=verbose
-        )
+        # Initialize inference engine
+        self.engine = get_inference_engine(config=config, verbose=verbose)
 
     def _get_model_token_limit(self, model: str) -> int:
         """
@@ -310,7 +307,7 @@ class CommitCommand:
                     success=False,
                     error_message=str(e)
                 )
-        except LLMError as e:
+        except InferenceError as e:
             show_error(f"AI generation failed: {e}")
             show_info("Opening editor for manual commit message...")
 
@@ -438,11 +435,13 @@ class CommitCommand:
 
         # Generate
         try:
-            message = self.client.generate(
+            request = InferenceRequest.from_prompt(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
-                max_tokens=500
+                max_tokens=50000
             )
+            response = self.engine.generate(request)
+            message = response.text
 
             # Add issue reference if detected
             if issue and issue not in message:
@@ -745,11 +744,13 @@ Rules:
         if self.verbose:
             show_info("Generating final commit message...")
 
-        final_message = self.client.generate(
+        request = InferenceRequest.from_prompt(
             prompt=final_prompt,
             system_prompt="You are an expert at writing clear, informative git commit messages.",
-            max_tokens=500
+            max_tokens=50000
         )
+        response = self.engine.generate(request)
+        final_message = response.text
 
         return final_message
 

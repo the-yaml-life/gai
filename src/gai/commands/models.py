@@ -27,17 +27,27 @@ class ModelsCommand:
             verbose=verbose
         )
 
-    def run(self, select=False, filter_tier=None, debug=False, filter_backend=None, filter_free=False):
+    def run(self, select=False, filter_tier=None, debug=False, filter_backend=None, filter_free=False, edit=False):
         """
         List available models from all backends.
 
         Args:
-            select: If True, allow interactive selection to update config
+            select: DEPRECATED - use edit instead
+            edit: If True, allow interactive selection to update config
             filter_tier: Filter by specific tier if API provides it (e.g., flagship, fast, light, reasoning)
             debug: If True, show raw API response for debugging
             filter_backend: Filter by specific backend (groq, anannas, ollama)
             filter_free: If True, show only free models (those with :free suffix)
         """
+        # Handle deprecated --select flag
+        if select:
+            edit = True
+
+        # If no flags: just show configured models
+        if not edit and not filter_tier and not debug and not filter_backend and not filter_free:
+            self._show_configured_models()
+            return
+
         console.print("\n[bold cyan]Fetching available models from all backends...[/bold cyan]\n")
 
         # Get models from all backends (raw if debug mode)
@@ -156,8 +166,75 @@ class ModelsCommand:
         console.print()
 
         # Interactive selection
-        if select:
+        if edit:
             self._interactive_selection(models)
+
+    def _show_configured_models(self):
+        """Show currently configured parallel models"""
+        console.print("\n[bold cyan]Configured Models[/bold cyan]\n")
+
+        # Get current parallel models
+        parallel_models = self.config.get('ai.parallel_models', [])
+        primary_model = self.config.get('ai.model', None)
+
+        if not parallel_models and not primary_model:
+            console.print("[yellow]No models configured[/yellow]")
+            console.print("[dim]Use 'gai models --edit' to select models[/dim]\n")
+            return
+
+        # Show primary model (optional - deprecated)
+        if primary_model:
+            console.print(f"[bold]Primary Model (deprecated):[/bold]")
+            console.print(f"  [cyan]{primary_model}[/cyan]\n")
+
+        # Show parallel models
+        if parallel_models:
+            console.print(f"[bold]Parallel Models ({len(parallel_models)}):[/bold]")
+
+            # Group by backend for better visualization
+            by_backend = {}
+            for model in parallel_models:
+                # Determine backend from prefix
+                if model.startswith("openrouter/"):
+                    backend = "openrouter"
+                    model_name = model.replace("openrouter/", "")
+                elif model.startswith("anannas/"):
+                    backend = "anannas"
+                    model_name = model.replace("anannas/", "")
+                elif model.startswith("ollama."):
+                    # ollama.endpoint/model
+                    parts = model.split("/", 1)
+                    backend = parts[0] if len(parts) > 1 else "ollama"
+                    model_name = parts[1] if len(parts) > 1 else model
+                elif model.startswith("ollama/"):
+                    backend = "ollama"
+                    model_name = model.replace("ollama/", "")
+                elif model.startswith("groq/"):
+                    backend = "groq"
+                    model_name = model.replace("groq/", "")
+                else:
+                    # Default to groq
+                    backend = "groq"
+                    model_name = model
+
+                if backend not in by_backend:
+                    by_backend[backend] = []
+                by_backend[backend].append((model, model_name))
+
+            # Display grouped by backend
+            for backend, models in sorted(by_backend.items()):
+                console.print(f"\n  [magenta]{backend}:[/magenta]")
+                for full_model, model_name in models:
+                    # Highlight free models
+                    if ':free' in model_name.lower():
+                        console.print(f"    [green]{model_name} (free)[/green]")
+                    else:
+                        console.print(f"    [cyan]{model_name}[/cyan]")
+        else:
+            console.print("[yellow]No parallel models configured[/yellow]")
+
+        console.print(f"\n[dim]Use 'gai models --edit' to modify selection[/dim]")
+        console.print(f"[dim]Use 'gai models --free' to see only free models[/dim]\n")
 
     def _filter_text_models(self, models):
         """
@@ -252,7 +329,7 @@ class ModelsCommand:
         # Count and show free models
         free_count = sum(1 for m in models if ':free' in m.get("id", "").lower())
         if free_count > 0:
-            console.print(f"[green]💰 {free_count} free models available (shown first)[/green]\n")
+            console.print(f"[green]{free_count} free models available (shown first)[/green]\n")
         else:
             console.print()
 
