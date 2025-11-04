@@ -111,7 +111,7 @@ class CommitCommand:
 
                     # Interactive confirmation (commit_confirm shows message internally)
                     if not dry_run:
-                        should_commit, final_message = commit_confirm(message, allow_edit=True)
+                        should_commit, final_message, should_push = commit_confirm(message, allow_edit=True)
                         if should_commit and final_message:
                             # Save to DB before committing
                             scope = Detection.detect_scope([line.split()[1] for line in status.split('\n') if line.strip()])
@@ -120,6 +120,10 @@ class CommitCommand:
 
                             self.git.commit(final_message)
                             show_success("Commit created!")
+
+                            # Push if requested
+                            if should_push:
+                                self._do_push()
                         else:
                             show_info("Commit aborted")
                     else:
@@ -202,7 +206,7 @@ class CommitCommand:
                 return
 
             # Interactive confirmation
-            should_commit, final_message = commit_confirm(message, allow_edit=True)
+            should_commit, final_message, should_push = commit_confirm(message, allow_edit=True)
 
             if should_commit and final_message:
                 edited = final_message != message
@@ -212,6 +216,10 @@ class CommitCommand:
                 commit_hash = self.git.get_last_commit_hash()
                 self._save_to_db(status, diff, diff_stat, final_message, commit_type, scope, breaking, committed=True, commit_hash=commit_hash, success=True)
                 show_success("Committed successfully")
+
+                # Push if requested
+                if should_push:
+                    self._do_push()
             else:
                 show_info("Commit cancelled")
                 # Save to DB if enabled (cancelled commit)
@@ -675,3 +683,19 @@ Rules:
         )
 
         return final_message
+
+    def _do_push(self):
+        """Push the commit to remote"""
+        try:
+            show_info("Pushing to remote...")
+            branch = self.git.get_current_branch()
+            result = self.git.push()
+
+            if result:
+                show_success(f"Pushed to origin/{branch}")
+            else:
+                show_warning("Push completed with warnings")
+
+        except GitError as e:
+            show_error(f"Push failed: {e}")
+            show_info("You can push manually with: git push")

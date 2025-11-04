@@ -161,3 +161,23 @@ class Git:
         except GitError:
             # Empty repo, no commits yet
             return None
+
+    def push(self, remote: str = "origin", branch: Optional[str] = None) -> bool:
+        """
+        Push commits to remote.
+
+        Args:
+            remote: Remote name (default: origin)
+            branch: Branch name (default: current branch)
+
+        Returns:
+            True if push succeeded
+
+        Raises:
+            GitError: If push fails
+        """
+        if branch is None:
+            branch = self.get_current_branch()
+
+        result = self._run("push", remote, branch)
+        return result.returncode == 0

@@ -6,6 +6,7 @@ import sys
 import subprocess
 import tempfile
 from typing import Optional
+import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -179,7 +180,7 @@ def edit_text(text: str, extension: str = "txt") -> Optional[str]:
 
 def select_option(options: list[tuple[str, str]], prompt: str = "Select:") -> Optional[str]:
     """
-    Let user select from options.
+    Let user select from options with single keypress.
 
     Args:
         options: List of (key, description) tuples
@@ -194,15 +195,37 @@ def select_option(options: list[tuple[str, str]], prompt: str = "Select:") -> Op
     console.print()
 
     valid_keys = [k for k, _ in options]
+    console.print(f"[cyan]{prompt}[/cyan] ", end="")
+    sys.stdout.flush()
+
     while True:
-        choice = Prompt.ask(prompt, choices=valid_keys + [""], show_choices=False)
-        if not choice:
+        try:
+            char = click.getchar()
+
+            # Handle Ctrl+C
+            if char == '\x03':
+                console.print()
+                raise KeyboardInterrupt
+
+            # Handle Enter/ESC (cancel)
+            if char in ['\r', '\n', '\x1b']:
+                console.print()
+                return None
+
+            # Check if valid option (case insensitive)
+            if char.lower() in valid_keys:
+                console.print(f"[bold cyan]{char.lower()}[/bold cyan]")
+                return char.lower()
+
+            # Invalid key - beep or ignore
+            # Just continue waiting for valid input
+
+        except (KeyboardInterrupt, EOFError):
+            console.print()
             return None
-        if choice in valid_keys:
-            return choice
 
 
-def commit_confirm(message: str, allow_edit: bool = True) -> tuple[bool, Optional[str]]:
+def commit_confirm(message: str, allow_edit: bool = True) -> tuple[bool, Optional[str], bool]:
     """
     Show commit message and ask for confirmation with edit option.
 
@@ -211,28 +234,31 @@ def commit_confirm(message: str, allow_edit: bool = True) -> tuple[bool, Optiona
         allow_edit: Whether to allow editing
 
     Returns:
-        (should_commit, final_message)
+        (should_commit, final_message, should_push)
     """
     show_commit_message(message)
 
     if allow_edit:
         options = [
             ("y", "Yes, commit with this message"),
+            ("p", "Push after commit"),
             ("n", "No, cancel"),
             ("e", "Edit message")
         ]
         choice = select_option(options, "Commit?")
 
         if choice == "y":
-            return True, message
+            return True, message, False
+        elif choice == "p":
+            return True, message, True
         elif choice == "e":
             edited = edit_text(message, "txt")
             if edited:
                 return commit_confirm(edited, allow_edit=True)
             else:
-                return False, None
+                return False, None, False
         else:
-            return False, None
+            return False, None, False
     else:
         confirmed = confirm("Commit with this message?", default=True)
-        return confirmed, message if confirmed else None
+        return confirmed, message if confirmed else None, False
