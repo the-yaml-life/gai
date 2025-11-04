@@ -58,12 +58,13 @@ class OpenRouterAdapter:
         elif response.status_code == 429:
             # Rate limit - extract wait time
             error_data = response.json()
-            error_msg = error_data.get("error", {}).get("message", "")
+            error_msg = error_data.get("error", {}).get("message", "Rate limit exceeded")
 
             wait_match = re.search(r'try again in ([\d.]+)s', error_msg)
             wait_time = float(wait_match.group(1)) + 1 if wait_match else 60.0
 
-            raise RateLimitError(error_msg, model=model, wait_time=wait_time)
+            self._log(f"Rate limit: {error_msg}")
+            raise RateLimitError(f"Rate limit: {error_msg}", model=model, wait_time=wait_time)
 
         else:
             # Other error

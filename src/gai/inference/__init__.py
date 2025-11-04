@@ -8,6 +8,7 @@ from gai.inference.exceptions import (
     InferenceError,
     RateLimitError,
     ProviderError,
+    BillingError,
     AllModelsFailedError
 )
 

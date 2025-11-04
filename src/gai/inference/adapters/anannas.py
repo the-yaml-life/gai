@@ -5,7 +5,7 @@ Anannas provider adapter
 import re
 import requests
 from typing import Dict, List, Any, Optional
-from gai.inference.exceptions import RateLimitError, ProviderError
+from gai.inference.exceptions import RateLimitError, ProviderError, BillingError
 from gai.core.stats import get_stats
 
 
@@ -70,6 +70,10 @@ class AnannasAdapter:
                 error_msg = error_data.get("error", {}).get("message", "Unknown error")
             except:
                 error_msg = response.text or "Unknown error"
+
+            # Check if it's a billing error
+            if "billing" in error_msg.lower() or "credit" in error_msg.lower():
+                raise BillingError(error_msg, provider="anannas")
 
             raise ProviderError(
                 f"Anannas API error: {error_msg}",

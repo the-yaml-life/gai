@@ -5,7 +5,7 @@ Inference engine - orchestrates adapters and strategies
 import os
 from typing import Dict, Optional
 from gai.inference.models import InferenceRequest, InferenceResponse
-from gai.inference.exceptions import InferenceError, AllModelsFailedError, RateLimitError
+from gai.inference.exceptions import InferenceError, AllModelsFailedError, RateLimitError, BillingError
 from gai.inference.adapters import GroqAdapter, OpenRouterAdapter, AnannasAdapter, OllamaAdapter
 from gai.inference.strategies import (
     SimpleRetryStrategy,
@@ -116,6 +116,12 @@ class InferenceEngine:
                 # Rate limit - already learned, skip to next model
                 self._log(f"Rate limit on {model_full}, skipping to next")
                 errors[model_full] = f"Rate limit: {e.wait_time:.1f}s"
+                continue
+
+            except BillingError as e:
+                # Billing error - skip to next model immediately
+                self._log(f"Billing error on {model_full}, skipping to next")
+                errors[model_full] = f"Billing: {str(e)}"
                 continue
 
             except Exception as e:

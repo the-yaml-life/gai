@@ -46,6 +46,11 @@ class SimpleRetryStrategy:
                 last_error = e
                 self._log(f"Attempt {attempt + 1}/{self.max_retries} failed: {e}")
 
+                # Check if error has skip_retry flag
+                if hasattr(e, 'skip_retry') and e.skip_retry:
+                    self._log("Error marked as non-retryable, skipping")
+                    raise
+
                 # Call error handler if provided
                 if on_error:
                     should_retry = on_error(e, attempt)

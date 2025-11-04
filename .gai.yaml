@@ -2,9 +2,28 @@ ai:
   api_url: https://api.groq.com/openai/v1/chat/completions
   max_tokens: 30000
   parallel_models:
-  - openrouter/deepseek/deepseek-chat-v3-0324:free
-  - openrouter/deepseek/deepseek-chat-v3.1:free
-  - openrouter/deepseek/deepseek-r1-0528-qwen3-8b:free
+  - openrouter/google/gemini-2.0-flash-exp:free
+  - openrouter/google/gemma-3-4b-it:free
+  - openrouter/meta-llama/llama-3.2-3b-instruct:free
+  - openrouter/meta-llama/llama-3.3-8b-instruct:free
+  - openrouter/moonshotai/kimi-k2:free
+  - openrouter/qwen/qwen3-4b:free
+  - groq/compound
+  - groq/compound-mini
+  - llama-3.1-8b-instant
+  - llama-3.3-70b-versatile
+  - meta-llama/llama-4-maverick-17b-128e-instruct
+  - meta-llama/llama-4-scout-17b-16e-instruct
+  - meta-llama/llama-guard-4-12b
+  - moonshotai/kimi-k2-instruct
+  - moonshotai/kimi-k2-instruct-0905
+  - openai/gpt-oss-120b
+  - openai/gpt-oss-20b
+  - openai/gpt-oss-safeguard-20b
+  - qwen/qwen3-32b
+  - ollama.remote/ollama.remote/deepseek-r1:1.5b
+  - ollama.remote/ollama.remote/gemma3:1b
+  - ollama.remote/ollama.remote/gemma3:4b
   temperature: 0.3
 commit:
   format: conventional
@@ -13,7 +32,7 @@ commit:
   issue_detection: true
   breaking_changes: false
   multi_line: true
-  max_diff_tokens: 25000
+  max_diff_tokens: 30000
 review_merge:
   check_conflicts: true
   show_stats: true

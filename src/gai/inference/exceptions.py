@@ -18,10 +18,17 @@ class RateLimitError(InferenceError):
 
 class ProviderError(InferenceError):
     """Provider-specific error (non-rate-limit)"""
-    def __init__(self, message: str, status_code: int = None, provider: str = None):
+    def __init__(self, message: str, status_code: int = None, provider: str = None, skip_retry: bool = False):
         super().__init__(message)
         self.status_code = status_code
         self.provider = provider
+        self.skip_retry = skip_retry  # If True, don't retry this error
+
+
+class BillingError(ProviderError):
+    """Billing/credit error - don't retry"""
+    def __init__(self, message: str, provider: str = None):
+        super().__init__(message, provider=provider, skip_retry=True)
 
 
 class AllModelsFailedError(InferenceError):
