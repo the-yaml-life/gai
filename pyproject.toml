@@ -57,7 +57,17 @@ gai = "gai.__main__:cli"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["gai", "gai.core", "gai.ai", "gai.commands", "gai.ui", "gai.utils"]
+packages = [
+    "gai",
+    "gai.core",
+    "gai.ai",
+    "gai.commands",
+    "gai.ui",
+    "gai.utils",
+    "gai.inference",
+    "gai.inference.adapters",
+    "gai.inference.strategies"
+]
 
 [tool.setuptools.package-data]
 gai = ["*.yaml", "*.yml"]
