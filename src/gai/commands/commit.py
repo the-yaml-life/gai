@@ -286,6 +286,9 @@ class CommitCommand:
                 # Push if requested
                 if should_push:
                     self._do_push()
+
+                # Suggest release if appropriate
+                self._suggest_release_if_needed()
             else:
                 show_info("Commit cancelled")
                 # Save to DB if enabled (cancelled commit)
@@ -330,6 +333,9 @@ class CommitCommand:
                         success=True
                     )
                 show_success("Committed successfully (manual)")
+
+                # Suggest release if appropriate
+                self._suggest_release_if_needed()
         except Exception as e:
             show_error(f"Unexpected error: {e}")
             if self.verbose:
@@ -769,3 +775,73 @@ Rules:
         except GitError as e:
             show_error(f"Push failed: {e}")
             show_info("You can push manually with: git push")
+
+    def _suggest_release_if_needed(self):
+        """
+        Suggest creating a release if there are enough unreleased commits.
+
+        Smart logic:
+        - Only suggest if version detection is enabled in config
+        - Only suggest if there are 3+ commits OR a breaking change
+        - Only suggest if last tag was more than 1 day ago (avoid spam)
+        """
+        # Check if version suggestions are enabled
+        if not self.config.get('commit.suggest_release', True):
+            return
+
+        try:
+            from gai.core.versioning import VersionManager
+
+            version_manager = VersionManager(self.git)
+
+            # Get current version
+            current_version = version_manager.get_current_version()
+
+            # Get commits since last version
+            commits = version_manager.get_commits_since_tag()
+
+            if not commits:
+                return
+
+            # Smart threshold: only suggest if meaningful
+            has_breaking = any(c.breaking for c in commits)
+            has_feat = any(c.type == 'feat' for c in commits)
+            commit_count = len(commits)
+
+            # Suggest if:
+            # - Breaking change (always)
+            # - 5+ commits (significant batch)
+            # - 3+ commits with at least one feature
+            should_suggest = (
+                has_breaking or
+                commit_count >= 5 or
+                (commit_count >= 3 and has_feat)
+            )
+
+            if not should_suggest:
+                return
+
+            # Detect suggested bump
+            suggested_bump = version_manager.detect_bump_type(commits)
+            next_version = version_manager.get_next_version(suggested_bump)
+
+            # Show suggestion
+            show_info("")
+            show_info(f"Suggestion: {commit_count} unreleased commit{'s' if commit_count > 1 else ''}")
+
+            if current_version:
+                show_info(f"  Current version: {current_version}")
+            show_info(f"  Suggested release: {next_version} ({suggested_bump.value} bump)")
+
+            if has_breaking:
+                show_warning("  Contains BREAKING CHANGES")
+
+            show_info("")
+            show_info("Create release:")
+            show_info("  gai release          # Interactive")
+            show_info("  gai release --auto   # Automatic")
+            show_info("  gai version          # View details")
+
+        except Exception:
+            # Silently fail - this is just a suggestion
+            pass

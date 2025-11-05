@@ -33,6 +33,12 @@ commit:
   breaking_changes: false
   multi_line: true
   max_diff_tokens: 30000
+  # Suggest creating a release after commits
+  # Shows suggestion when:
+  # - Breaking change (always)
+  # - 5+ unreleased commits
+  # - 3+ commits with at least one feature
+  suggest_release: true
 review_merge:
   check_conflicts: true
   show_stats: true
