@@ -228,7 +228,7 @@ class InferenceEngine:
                     request = InferenceRequest(
                         messages=messages,
                         model=model,
-                        params={"max_tokens": max_tokens}
+                        max_tokens=max_tokens
                     )
 
                     # Generate using engine
