@@ -709,7 +709,7 @@ Focus on: what changed, why it matters, key functionality added/modified."""
             show_info("Generating summaries in parallel...")
 
         try:
-            summaries = self.client.generate_parallel(
+            summaries = self.engine.generate_parallel(
                 prompts=prompts,
                 models=models,
                 system_prompt="You are analyzing code changes for a git commit message."

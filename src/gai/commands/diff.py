@@ -6,7 +6,7 @@ from gai.core.git import Git, GitError
 from gai.core.config import Config
 from gai.core.tokens import estimate_tokens
 from gai.core.stats import get_stats
-from gai.ai.llm_factory import MultiBackendClient, LLMError
+from gai.inference import get_inference_engine, InferenceRequest, InferenceError
 from gai.ai.prompts import Prompts
 from gai.ui.interactive import (
     show_diff_summary,
@@ -28,11 +28,8 @@ class DiffCommand:
         self.git = git
         self.verbose = verbose
 
-        # Initialize AI client (multi-backend support)
-        self.client = MultiBackendClient(
-            config=config,
-            verbose=verbose
-        )
+        # Initialize inference engine
+        self.engine = get_inference_engine(config=config, verbose=verbose)
 
     def run(
         self,
@@ -136,7 +133,7 @@ class DiffCommand:
 
         except GitError as e:
             show_error(f"Git error: {e}")
-        except LLMError as e:
+        except InferenceError as e:
             show_error(f"AI analysis failed: {e}")
             if self.verbose:
                 import traceback
@@ -180,11 +177,13 @@ class DiffCommand:
         )
 
         try:
-            summary = self.client.generate(
+            request = InferenceRequest.from_prompt(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 max_tokens=600
             )
+            response = self.engine.generate(request)
+            summary = response.text
 
             return summary
 

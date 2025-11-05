@@ -9,7 +9,7 @@ from rich.table import Table
 
 from gai.core.config import Config
 from gai.core.git import Git, GitError
-from gai.ai.llm_factory import MultiBackendClient, LLMError
+from gai.inference import get_inference_engine, InferenceRequest, InferenceError
 
 
 class DebugCommand:
@@ -20,7 +20,7 @@ class DebugCommand:
         self.git = git
         self.verbose = verbose
         self.console = Console()
-        self.client = MultiBackendClient(config, verbose)
+        self.engine = get_inference_engine(config=config, verbose=verbose)
 
     def run(self):
         """Main debug flow"""
@@ -254,12 +254,13 @@ class DebugCommand:
             # Get AI response
             system_prompt = "You are a git expert helping developers understand and resolve git problems. Be concise and practical."
 
-            response = self.client.generate(
+            request = InferenceRequest.from_prompt(
                 prompt=prompt,
                 system_prompt=system_prompt,
-                max_tokens=800,
-                temperature=0.3
+                max_tokens=800
             )
+            inference_response = self.engine.generate(request)
+            response = inference_response.text
 
             # Show analysis
             self.console.print(Panel(
@@ -277,7 +278,7 @@ class DebugCommand:
             self.console.print("  [cyan]gai fix --reset[/cyan]   (discard local changes)")
             self.console.print()
 
-        except LLMError as e:
+        except InferenceError as e:
             self.console.print(f"[yellow]Could not get AI analysis: {e}[/yellow]")
             self.console.print()
 

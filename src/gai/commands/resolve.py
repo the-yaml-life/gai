@@ -12,7 +12,7 @@ import click
 
 from gai.core.config import Config
 from gai.core.git import Git, GitError
-from gai.ai.llm_factory import MultiBackendClient, LLMError
+from gai.inference import get_inference_engine, InferenceRequest, InferenceError
 
 
 class ResolveCommand:
@@ -23,7 +23,7 @@ class ResolveCommand:
         self.git = git
         self.verbose = verbose
         self.console = Console()
-        self.client = MultiBackendClient(config, verbose)
+        self.engine = get_inference_engine(config=config, verbose=verbose)
 
     def run(self, auto: bool = False):
         """
@@ -149,7 +149,7 @@ class ResolveCommand:
                         border_style="cyan"
                     ))
                     self.console.print()
-                except LLMError:
+                except InferenceError:
                     pass  # Continue without AI
 
             # Ask user choice
@@ -280,12 +280,13 @@ Be concise and practical."""
 
         system_prompt = "You are a code review expert analyzing merge conflicts."
 
-        analysis = self.client.generate(
+        request = InferenceRequest.from_prompt(
             prompt=prompt,
             system_prompt=system_prompt,
-            max_tokens=300,
-            temperature=0.3
+            max_tokens=300
         )
+        response = self.engine.generate(request)
+        analysis = response.text
 
         return analysis.strip()
 
@@ -327,18 +328,19 @@ You understand code semantics and can make intelligent decisions about how to co
 Be conservative - when in doubt, try to preserve both changes if they can coexist."""
 
         # Get AI response
-        response = self.client.generate(
+        request = InferenceRequest.from_prompt(
             prompt=prompt,
             system_prompt=system_prompt,
-            max_tokens=4000,
-            temperature=0.2
+            max_tokens=4000
         )
+        inference_response = self.engine.generate(request)
+        response = inference_response.text
 
         # Parse response
         parts = response.split('RESOLVED_CONTENT:')
 
         if len(parts) != 2:
-            raise LLMError("AI response format invalid")
+            raise InferenceError("AI response format invalid")
 
         explanation = parts[0].replace('EXPLANATION:', '').strip()
         resolved_content = parts[1].strip()

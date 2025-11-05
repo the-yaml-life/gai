@@ -159,6 +159,121 @@ class InferenceEngine:
             usage=usage
         )
 
+    def generate_parallel(
+        self,
+        prompts: list,
+        models: list,
+        system_prompt: str = None
+    ) -> list:
+        """
+        Generate completions in parallel using multiple models.
+
+        Args:
+            prompts: List of (prompt_text, description, max_tokens) tuples
+            models: List of model names to use
+            system_prompt: Optional system prompt for all requests
+
+        Returns:
+            List of generated texts (same order as prompts)
+        """
+        from concurrent.futures import ThreadPoolExecutor
+        import time
+
+        if not models:
+            raise InferenceError("No models provided for parallel generation")
+
+        if len(prompts) > len(models):
+            raise InferenceError(f"Not enough models ({len(models)}) for prompts ({len(prompts)})")
+
+        self._log(f"Parallel generation: {len(prompts)} prompts with {len(models)} models")
+
+        # Track pending tasks
+        pending = {idx: (prompt_data, []) for idx, prompt_data in enumerate(prompts)}
+        results = {}
+
+        MAX_ITERATIONS = 10  # Prevent infinite loops
+
+        iteration = 0
+        while pending and iteration < MAX_ITERATIONS:
+            iteration += 1
+            tasks_to_run = []
+
+            # Assign models to pending tasks
+            for idx, (prompt_data, tried_models) in pending.items():
+                available_models = [m for m in models if m not in tried_models]
+
+                if not available_models:
+                    # All models tried for this task - wait and retry
+                    self._log(f"[{idx}] All models tried, resetting...")
+                    tried_models.clear()
+                    available_models = models[:]
+
+                # Pick next model to try
+                model = available_models[0]
+                tasks_to_run.append((idx, prompt_data, model))
+
+            # Execute batch in parallel
+            def generate_one(idx: int, prompt_data: tuple, model: str) -> tuple:
+                """Generate one completion and return (index, result, success)"""
+                prompt_text, description, max_tokens = prompt_data
+                self._log(f"[{idx}] {description} using {model}")
+
+                try:
+                    # Create request
+                    messages = []
+                    if system_prompt:
+                        messages.append({"role": "system", "content": system_prompt})
+                    messages.append({"role": "user", "content": prompt_text})
+
+                    request = InferenceRequest(
+                        messages=messages,
+                        model=model,
+                        params={"max_tokens": max_tokens}
+                    )
+
+                    # Generate using engine
+                    response = self.generate(request)
+
+                    self._log(f"[{idx}] ✓ Complete with {model}")
+                    return (idx, response.text, True)
+
+                except (RateLimitError, BillingError) as e:
+                    self._log(f"[{idx}] Rate limit/billing error with {model}: {e}")
+                    return (idx, "", False)
+                except Exception as e:
+                    self._log(f"[{idx}] Unexpected error with {model}: {e}")
+                    return (idx, "", False)
+
+            # Run tasks in parallel
+            with ThreadPoolExecutor(max_workers=len(tasks_to_run)) as executor:
+                futures = []
+                for idx, prompt_data, model in tasks_to_run:
+                    future = executor.submit(generate_one, idx, prompt_data, model)
+                    futures.append((future, idx, model))
+
+                # Collect results
+                for future, idx, model in futures:
+                    result_idx, result_text, success = future.result()
+
+                    if success:
+                        results[result_idx] = result_text
+                        if result_idx in pending:
+                            del pending[result_idx]
+                    else:
+                        # Mark model as tried and retry
+                        if result_idx in pending:
+                            pending[result_idx][1].append(model)
+
+            # Small delay between iterations
+            if pending:
+                time.sleep(1)
+
+        if pending:
+            raise InferenceError(f"Failed to complete {len(pending)} prompts after {MAX_ITERATIONS} iterations")
+
+        # Return in original order
+        return [results[i] for i in range(len(prompts))]
+
 
 def get_inference_engine(config: Config, verbose: bool = False) -> InferenceEngine:
     """
