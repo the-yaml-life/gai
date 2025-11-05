@@ -1,121 +1,180 @@
-# gai - Git AI Assistant
+# gai
 
-AI-powered git assistant for commit messages, merge reviews, and intelligent diff analysis.
+**TL;DR:** AI git assistant for commits, diffs, merges, releases, and conflict resolution.
+```bash
+git clone https://github.com/the-yaml-life/gai.git && cd gai && pip install -e . && gai init
+```
 
-## Features
+## Commands
 
-- **Smart Commit Messages**: Generate conventional commit messages from your changes
-- **Multi-Model Parallel Processing**: Handle large diffs by distributing work across multiple models
-- **Merge Preview**: AI-powered analysis of merge conflicts and changes
-- **Intelligent Diff Analysis**: Get summaries of code changes between branches
-- **Usage Stats**: Track AI usage with JSON or database backend (SQLite/PostgreSQL)
-- **Smart Detection**: Automatic scope, type, and issue detection from files and branch names
-- **OpenAI-Compatible**: Works with Groq, Ollama, OpenAI, or any compatible API
+```
+commit        Generate conventional commit messages
+diff          Analyze branch differences
+review-merge  Preview merge with AI analysis
+resolve       AI-assisted conflict resolution
+fix           Auto-fix git problems (diverged, conflicts)
+debug         Explain git issues without fixing
+version       Show version and suggest next bump
+release       Create semantic releases with changelog
+models        List/filter available models
+stats         Track API usage and tokens
+config-show   Display current configuration
+init          Initialize config in ~/.config/gai/
+```
 
 ## Installation
 
-### From Source
-
 ```bash
-git clone https://github.com/yourusername/gai.git
+# From source
+git clone <repo-url>
 cd gai
 pip install -e .
-```
 
-### Using Container
+# Initialize configuration
+gai init
 
-```bash
-podman build -t gai .
-podman run -v /path/to/repo:/workspace -e GROQ_API_KEY=key gai commit --dry-run
-```
-
-## Quick Start
-
-1. Get API key from [console.groq.com](https://console.groq.com)
-2. Create `.env` file:
-   ```bash
-   GROQ_API_KEY=your_key_here
-   ```
-3. Generate commit:
-   ```bash
-   gai commit --dry-run  # Preview
-   gai commit           # Create commit
-   ```
-
-## Usage
-
-```bash
-# Commit messages
-gai commit                              # Interactive mode
-gai commit --dry-run                    # Preview only
-gai commit --auto                       # Auto-commit
-gai commit --context "Fix login bug"   # Add context
-
-# Merge preview
-gai review-merge main                   # Analyze merge
-
-# Diff analysis
-gai diff                                # Current branch vs HEAD
-gai diff main                           # Compare with main
-gai diff --stat                         # File statistics
-
-# Model management
-gai models                              # List available models
-gai models --select                     # Interactive selection
-
-# Stats
-gai stats                               # View usage stats
-gai stats --reset                       # Reset stats
+# Edit config and add API keys
+vim ~/.config/gai/.env
+vim ~/.config/gai/config.yaml
 ```
 
 ## Configuration
 
-Edit `.gai.yaml`:
+Config cascade: `~/.config/gai/config.yaml` → `.gai.yaml` (project-local)
 
+### Backends
+
+**Groq** (requires `GROQ_API_KEY`)
 ```yaml
 ai:
   api_url: https://api.groq.com/openai/v1/chat/completions
-  model: llama-3.3-70b-versatile
-  max_tokens: 30000
-  temperature: 0.3
-  parallel_models:              # For large diffs
+  parallel_models:
     - llama-3.3-70b-versatile
-    - meta-llama/llama-4-scout-17b-16e-instruct
-    - qwen/qwen3-32b
+    - groq/compound
+```
 
+**Ollama** (multiple endpoints)
+```yaml
+ollama:
+  base_url: http://localhost:11434
+  endpoints:
+    local: http://localhost:11434
+    remote: https://ollama.example.com
+
+ai:
+  parallel_models:
+    - ollama.local/qwen2.5-coder:7b
+    - ollama.remote/deepseek-r1:1.5b
+```
+
+**Anannas** (requires `ANANNAS_API_KEY`)
+```yaml
+anannas:
+  api_url: https://api.anannas.ai/v1/chat/completions
+```
+
+**OpenRouter** (requires `OPENROUTER_API_KEY`)
+```yaml
+openrouter:
+  api_url: https://openrouter.ai/api/v1/chat/completions
+
+ai:
+  parallel_models:
+    - openrouter/google/gemini-2.0-flash-exp:free
+    - openrouter/meta-llama/llama-3.3-8b-instruct:free
+```
+
+### Key Options
+
+```yaml
 commit:
-  format: conventional          # conventional, free, minimal
-  scope_detection: true
-  issue_detection: true
-  max_diff_tokens: 25000
+  format: conventional           # conventional, free, minimal
+  scope_detection: true          # Auto-detect scope from paths
+  issue_detection: true          # Parse issue refs from branch names
+  max_diff_tokens: 30000
+  suggest_release: true          # Suggest release after commits
 
 stats:
-  use_db: false                 # true for database backend
-  backend: sqlite               # sqlite or postgresql
-  db_path: ~/.gai.db
+  use_db: true
+  backend: sqlite                # sqlite or postgresql
+  db_path: ~/.config/gai/gai.db
+
+models:
+  exclude_keywords:              # Filter out unwanted models
+    - whisper
+    - tts
+```
+
+## Usage
+
+### Commits
+```bash
+gai commit                      # Interactive mode
+gai commit --dry-run            # Preview without committing
+gai commit --auto               # Auto-commit without confirmation
+gai commit --context "Fix bug"  # Add context
+gai commit --amend              # Amend last commit
+```
+
+### Diffs and Merges
+```bash
+gai diff                        # Current branch vs HEAD
+gai diff main                   # Compare with main branch
+gai diff --stat                 # Show file statistics
+
+gai review-merge main           # Analyze merge before merging
+```
+
+### Conflict Resolution
+```bash
+gai debug                       # Explain current git problem
+gai fix --auto                  # Auto-fix diverged/conflicts
+gai resolve                     # AI-assisted conflict resolution
+```
+
+### Releases
+```bash
+gai version                     # Show current version
+gai version --commits           # Show commits since last release
+
+gai release                     # Auto-detect bump type
+gai release --major             # Force major bump
+gai release --dry-run           # Preview release
+```
+
+### Models
+```bash
+gai models                      # List configured models
+gai models --edit               # Interactive model selection
+gai models --backend groq       # Filter by backend
+gai models --free               # Show only free models
+gai models --tier flagship      # Filter by tier
+```
+
+### Stats
+```bash
+gai stats                       # View usage statistics
+gai stats --reset               # Reset statistics
 ```
 
 ## Multi-Model Parallel Processing
 
-For large diffs that exceed token limits, gai can distribute work across multiple models:
+For large diffs exceeding token limits, gai distributes work across multiple models:
 
-1. Smart sampling prioritizes critical files (README, LICENSE, package files)
-2. Chunks diff into pieces and sends to different models in parallel
-3. Each model analyzes its chunk independently
-4. Combines all analyses into final commit message
+1. Prioritizes critical files (README, LICENSE, package files)
+2. Chunks diff and sends to parallel models
+3. Combines analyses into final result
 
-Configure parallel models in `.gai.yaml` or use `gai models --select` for interactive setup.
+Configure in `parallel_models` list. Use `gai models --edit` for interactive setup.
 
 ## Database Backend
-
-Enable persistent storage for team collaboration:
 
 ```yaml
 # SQLite (single user)
 stats:
   use_db: true
   backend: sqlite
-  db_path: ~/.gai.db
+  db_path: ~/.config/gai/gai.db
 
 # PostgreSQL (team/shared)
 stats:
@@ -125,53 +184,33 @@ stats:
 ```
 
 Query examples:
-
 ```bash
-# Recent commits
-sqlite3 ~/.gai.db "SELECT * FROM gai_records ORDER BY timestamp DESC LIMIT 10"
-
-# Token usage by model
-sqlite3 ~/.gai.db "SELECT model_used, SUM(total_tokens) FROM gai_records GROUP BY model_used"
+sqlite3 ~/.config/gai/gai.db "SELECT * FROM gai_records ORDER BY timestamp DESC LIMIT 10"
+sqlite3 ~/.config/gai/gai.db "SELECT model_used, SUM(total_tokens) FROM gai_records GROUP BY model_used"
 ```
 
 ## Project Structure
 
 ```
 src/gai/
-├── ai/                 # AI client and rate limiting
-├── commands/           # CLI commands (commit, review-merge, diff, models)
-├── core/              # Git, config, stats, tokens
-├── ui/                # Interactive UI components
+├── inference/          # Inference engine (adapters + strategies)
+│   ├── adapters/       # Groq, Ollama, Anannas, OpenRouter
+│   └── strategies/     # Fallback, RateLimit, Retry
+├── commands/           # CLI commands
+├── core/              # Git, config, stats, tokens, versioning
+├── ui/                # Interactive prompts
 └── utils/             # Detection utilities
-
-tests/
-├── unit/              # Unit tests
-├── integration/       # Integration tests
-└── conftest.py        # Pytest fixtures
 ```
-
-## Smart Detection
-
-- **Commit Type**: Detects feat, fix, refactor, docs, test, chore from changes
-- **Scope**: Extracts scope from file paths (e.g., `src/auth/` → `auth`)
-- **Issues**: Parses issue numbers from branch names (e.g., `feature/JIRA-123` → `JIRA-123`)
 
 ## Development
 
 ```bash
-# Run tests
-pytest
-
-# With coverage
+pytest                          # Run all tests
+pytest -m unit                  # Unit tests only
+pytest -m integration           # Integration tests only
 pytest --cov=gai --cov-report=html
-
-# Test specific markers
-pytest -m unit
-pytest -m integration
 ```
 
 ## License
 
 GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)
-
-See LICENSE file for details.
