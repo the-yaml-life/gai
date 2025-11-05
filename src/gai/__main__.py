@@ -324,6 +324,59 @@ def fix(ctx, rebase, merge, reset, pull, auto, force):
 
 
 @cli.command()
+@click.option('--commits', '-c', is_flag=True, help='Show commits since last version')
+@click.pass_context
+def version(ctx, commits):
+    """Show current version and suggest next"""
+    from gai.commands.version import VersionCommand
+
+    verbose = ctx.obj['config'].get('general.verbose', False)
+    cmd = VersionCommand(
+        config=ctx.obj['config'],
+        git=ctx.obj['git'],
+        verbose=verbose
+    )
+
+    cmd.run(show_commits=commits)
+
+
+@cli.command()
+@click.option('--major', is_flag=True, help='Force major version bump')
+@click.option('--minor', is_flag=True, help='Force minor version bump')
+@click.option('--patch', is_flag=True, help='Force patch version bump')
+@click.option('--auto', is_flag=True, help='Automatically execute without confirmation')
+@click.option('--dry-run', is_flag=True, help='Show what would happen without executing')
+@click.option('--skip-changelog', is_flag=True, help='Skip CHANGELOG.md generation')
+@click.pass_context
+def release(ctx, major, minor, patch, auto, dry_run, skip_changelog):
+    """Create a semantic version release"""
+    from gai.commands.release import ReleaseCommand
+
+    # Determine bump type from flags
+    bump_type = None
+    if major:
+        bump_type = 'major'
+    elif minor:
+        bump_type = 'minor'
+    elif patch:
+        bump_type = 'patch'
+
+    verbose = ctx.obj['config'].get('general.verbose', False)
+    cmd = ReleaseCommand(
+        config=ctx.obj['config'],
+        git=ctx.obj['git'],
+        verbose=verbose
+    )
+
+    cmd.run(
+        bump_type=bump_type,
+        auto=auto,
+        dry_run=dry_run,
+        skip_changelog=skip_changelog
+    )
+
+
+@cli.command()
 @click.option('--force', '-f', is_flag=True, help='Overwrite existing config')
 def init(force):
     """Initialize gai configuration in ~/.config/gai/"""

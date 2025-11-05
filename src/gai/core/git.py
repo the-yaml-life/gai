@@ -33,6 +33,24 @@ class Git:
         except subprocess.CalledProcessError as e:
             raise GitError(f"Git command failed: {e.stderr}") from e
 
+    def run(self, args: List[str], check: bool = True) -> subprocess.CompletedProcess:
+        """
+        Run git command (public interface).
+
+        Args:
+            args: List of git command arguments
+            check: Raise exception on error
+
+        Returns:
+            CompletedProcess result
+        """
+        return self._run(*args, check=check)
+
+    def repo_root(self) -> str:
+        """Get repository root path"""
+        result = self._run("rev-parse", "--show-toplevel")
+        return result.stdout.strip()
+
     def is_repo(self) -> bool:
         """Check if current dir is a git repo"""
         result = self._run("rev-parse", "--git-dir", check=False)
