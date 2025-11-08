@@ -314,6 +314,9 @@ class CommitCommand:
                 commit_hash = self.git.get_last_commit_hash()
                 self._save_to_db(status, diff, diff_stat, message, commit_type, scope, breaking, committed=True, commit_hash=commit_hash, success=True)
                 show_success("Committed successfully")
+
+                # Auto push when using --auto
+                self._do_push()
                 return
 
             # Interactive confirmation

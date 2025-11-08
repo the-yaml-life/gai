@@ -56,8 +56,9 @@ def cli(ctx, verbose, config):
 @click.option('--context', '-m', help='Additional context for generation')
 @click.option('--breaking', is_flag=True, help='Mark as breaking change')
 @click.option('--dry-run', is_flag=True, help='Show message without committing')
+@click.option('--no-add', is_flag=True, help='Skip git add, use only staged changes')
 @click.pass_context
-def commit(ctx, auto, amend, context, breaking, dry_run):
+def commit(ctx, auto, amend, context, breaking, dry_run, no_add):
     """Auto-generate commit message"""
     from gai.commands.commit import CommitCommand
 
@@ -73,7 +74,8 @@ def commit(ctx, auto, amend, context, breaking, dry_run):
         amend=amend,
         context=context,
         breaking=breaking,
-        dry_run=dry_run
+        dry_run=dry_run,
+        no_add=no_add
     )
 
 
