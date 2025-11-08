@@ -103,14 +103,21 @@ class CommitCommand:
                         if self.verbose:
                             show_info("Running git add -A...")
                         self.git.add_all()
+                        # Show files that will be committed
+                        show_info("\nFiles selected:")
+                        for f in unstaged_files:
+                            show_info(f"  - {f}")
+                        show_info("")
                     elif add_mode == "select":
                         selected_files = select_files_to_add(unstaged_files)
                         if selected_files is None:
                             show_info("Commit cancelled")
                             return
                         elif selected_files:
-                            if self.verbose:
-                                show_info(f"Adding {len(selected_files)} file(s)...")
+                            show_info(f"\nFiles selected ({len(selected_files)}):")
+                            for f in selected_files:
+                                show_info(f"  - {f}")
+                            show_info("")
                             self.git.add_files(selected_files)
                         # If empty list, use only staged files (do nothing)
                     elif add_mode == "staged":
@@ -148,6 +155,7 @@ class CommitCommand:
                 if len(parallel_models) >= 2:
                     # Multi-model parallel processing (automatic)
                     show_info(f"Processing with {len(parallel_models)} models in parallel...")
+                    show_info("Generating commit message...")
 
                     # Split diff into chunks and process in parallel
                     message = self._generate_parallel_commit(
@@ -215,6 +223,7 @@ class CommitCommand:
                         # Try automatic fallback to parallel processing if configured
                         if len(parallel_models) >= 2:
                             show_info(f"Automatically using {len(parallel_models)} models in parallel...")
+                            show_info("Generating commit message...")
 
                             # Use parallel processing
                             message = self._generate_parallel_commit(
@@ -274,8 +283,7 @@ class CommitCommand:
                 commit_type = Detection.detect_type(diff, changed_files)
 
             # Generate commit message
-            if self.verbose:
-                show_info("Generating commit message...")
+            show_info("Generating commit message...")
 
             message = self._generate_message(
                 status=status,
