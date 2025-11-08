@@ -91,6 +91,40 @@ class Git:
         """Run git add -A"""
         self._run("add", "-A")
 
+    def add_files(self, files: List[str]):
+        """Add specific files to staging"""
+        if files:
+            self._run("add", "--", *files)
+
+    def get_unstaged_files(self) -> List[str]:
+        """Get list of unstaged files (modified or untracked)"""
+        result = self._run("status", "--porcelain")
+        files = []
+        for line in result.stdout.strip().split('\n'):
+            if not line:
+                continue
+            # Parse git status porcelain format
+            # Format: XY filename
+            # X = staged status, Y = unstaged status
+            if len(line) < 3:
+                continue
+            unstaged_status = line[1]
+            # If unstaged status is not space, file has unstaged changes
+            if unstaged_status != ' ':
+                # Extract filename (skip first 3 chars: XY + space)
+                filename = line[3:]
+                files.append(filename)
+            # Also include untracked files (status ??)
+            elif line.startswith('??'):
+                filename = line[3:]
+                files.append(filename)
+        return files
+
+    def has_staged_files(self) -> bool:
+        """Check if there are any staged files"""
+        result = self._run("diff", "--cached", "--name-only")
+        return bool(result.stdout.strip())
+
     def commit(self, message: str):
         """Create commit with message"""
         self._run("commit", "-m", message)

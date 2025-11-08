@@ -16,7 +16,9 @@ from gai.ui.interactive import (
     show_success,
     commit_confirm,
     edit_text,
-    confirm
+    confirm,
+    ask_add_mode,
+    select_files_to_add
 )
 from gai.utils.detection import Detection
 
@@ -57,7 +59,8 @@ class CommitCommand:
         amend: bool = False,
         context: str = None,
         breaking: bool = False,
-        dry_run: bool = False
+        dry_run: bool = False,
+        no_add: bool = False
     ):
         """
         Run commit command.
@@ -68,6 +71,7 @@ class CommitCommand:
             context: Additional context
             breaking: Mark as breaking change
             dry_run: Show message without committing
+            no_add: Skip git add, use only staged changes
         """
         # Record command usage
         get_stats().record_command("commit")
@@ -82,10 +86,43 @@ class CommitCommand:
                 show_warning("No changes to commit")
                 return
 
-            # Add all changes
-            if self.verbose:
-                show_info("Running git add -A...")
-            self.git.add_all()
+            # Handle adding files (interactive mode if not --auto and not --no-add)
+            if not no_add:
+                # Check if there are unstaged files
+                unstaged_files = self.git.get_unstaged_files()
+                has_staged = self.git.has_staged_files()
+
+                # Interactive mode: ask how to add files if not in auto mode
+                if not auto and unstaged_files:
+                    add_mode = ask_add_mode()
+
+                    if add_mode is None:
+                        show_info("Commit cancelled")
+                        return
+                    elif add_mode == "all":
+                        if self.verbose:
+                            show_info("Running git add -A...")
+                        self.git.add_all()
+                    elif add_mode == "select":
+                        selected_files = select_files_to_add(unstaged_files)
+                        if selected_files is None:
+                            show_info("Commit cancelled")
+                            return
+                        elif selected_files:
+                            if self.verbose:
+                                show_info(f"Adding {len(selected_files)} file(s)...")
+                            self.git.add_files(selected_files)
+                        # If empty list, use only staged files (do nothing)
+                    elif add_mode == "staged":
+                        # Use only staged files, do nothing
+                        if self.verbose:
+                            show_info("Using only staged files...")
+                else:
+                    # Auto mode or no unstaged files: add all
+                    if unstaged_files:
+                        if self.verbose:
+                            show_info("Running git add -A...")
+                        self.git.add_all()
 
             # Get diff after staging
             diff = self.git.get_diff(cached=True)

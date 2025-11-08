@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 from typing import Optional
 import click
+import questionary
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
@@ -273,3 +274,73 @@ def commit_confirm(message: str, allow_edit: bool = True) -> tuple[bool, Optiona
     else:
         confirmed = confirm("Commit with this message?", default=True)
         return confirmed, message if confirmed else None, False
+
+
+def select_files_to_add(unstaged_files: list[str]) -> Optional[list[str]]:
+    """
+    Let user select which files to add to staging.
+
+    Args:
+        unstaged_files: List of unstaged file paths
+
+    Returns:
+        List of selected files or None if cancelled
+    """
+    if not unstaged_files:
+        return []
+
+    console.print()
+    console.print("[cyan]Select files to add (space to select, enter to confirm):[/cyan]")
+    console.print()
+
+    try:
+        selected = questionary.checkbox(
+            "Files:",
+            choices=unstaged_files,
+            style=questionary.Style([
+                ('selected', 'fg:#00ff00'),
+                ('highlighted', 'fg:#00ffff bold'),
+                ('pointer', 'fg:#00ffff bold'),
+            ])
+        ).ask()
+
+        return selected if selected is not None else None
+
+    except (KeyboardInterrupt, EOFError):
+        console.print()
+        return None
+
+
+def ask_add_mode() -> Optional[str]:
+    """
+    Ask user how they want to handle adding files.
+
+    Returns:
+        'all': Add all files
+        'select': Let user select files
+        'staged': Use only staged files
+        None: Cancel
+    """
+    console.print()
+
+    try:
+        choice = questionary.select(
+            "How do you want to add files?",
+            choices=[
+                questionary.Choice("Add all files (git add -A)", value="all"),
+                questionary.Choice("Select files to add", value="select"),
+                questionary.Choice("Use only staged files", value="staged"),
+                questionary.Choice("Cancel", value="cancel"),
+            ],
+            style=questionary.Style([
+                ('selected', 'fg:#00ff00'),
+                ('highlighted', 'fg:#00ffff bold'),
+                ('pointer', 'fg:#00ffff bold'),
+            ])
+        ).ask()
+
+        return None if choice == "cancel" or choice is None else choice
+
+    except (KeyboardInterrupt, EOFError):
+        console.print()
+        return None
