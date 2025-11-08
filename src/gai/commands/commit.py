@@ -438,6 +438,56 @@ class CommitCommand:
                 error_message=error_message
             )
 
+    def _clean_commit_message(self, message: str) -> str:
+        """
+        Clean commit message from common LLM decorations.
+
+        Removes:
+        - Markdown code blocks (```bash, ```, etc)
+        - Preambles like "Here's a commit message:"
+        - Optional body labels
+        """
+        import re
+
+        lines = message.strip().split('\n')
+        cleaned_lines = []
+        in_code_block = False
+        skip_next = False
+
+        for line in lines:
+            # Skip markdown code fences
+            if line.strip().startswith('```'):
+                in_code_block = not in_code_block
+                continue
+
+            # Skip if we're inside a code block marker
+            if in_code_block:
+                cleaned_lines.append(line)
+                continue
+
+            # Skip common preambles
+            lower = line.lower().strip()
+            if any(phrase in lower for phrase in [
+                "here's a commit",
+                "here is a commit",
+                "commit message:",
+                "optional body:",
+                "the commit message",
+            ]):
+                continue
+
+            cleaned_lines.append(line)
+
+        result = '\n'.join(cleaned_lines).strip()
+
+        # Remove leading/trailing empty lines
+        while result.startswith('\n'):
+            result = result[1:]
+        while result.endswith('\n\n'):
+            result = result[:-1]
+
+        return result
+
     def _generate_message(
         self,
         status: str,
@@ -495,6 +545,9 @@ class CommitCommand:
             )
             response = self.engine.generate(request)
             message = response.text
+
+            # Clean up LLM decorations
+            message = self._clean_commit_message(message)
 
             # Add issue reference if detected
             if issue and issue not in message:

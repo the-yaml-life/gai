@@ -24,6 +24,10 @@ class Prompts:
             (system_prompt, user_prompt)
         """
         system_prompt = """You are an expert at writing clear, concise git commit messages.
+
+CRITICAL: Your response must be ONLY the commit message itself, ready to use with git commit.
+Do NOT include any explanations, markdown code blocks, or meta-text like "Here's a commit message".
+
 Follow these rules:
 - Use conventional commits format: <type>(<scope>): <description>
 - Types: feat, fix, docs, style, refactor, test, chore, perf
@@ -31,14 +35,23 @@ Follow these rules:
 - Description: imperative mood, lowercase, no period
 - Body: optional, explain what and why vs how
 - Keep title under 72 characters
-- Be specific and descriptive"""
+- Be specific and descriptive
+
+Output the raw commit message text only."""
 
         if not conventional:
             system_prompt = """You are an expert at writing clear, concise git commit messages.
-- Use imperative mood (\"Add feature\" not \"Added feature\")
+
+CRITICAL: Your response must be ONLY the commit message itself, ready to use with git commit.
+Do NOT include any explanations, markdown code blocks, or meta-text.
+
+Rules:
+- Use imperative mood ("Add feature" not "Added feature")
 - Be specific and descriptive
 - Keep first line under 72 characters
-- Optionally add body for complex changes"""
+- Optionally add body for complex changes
+
+Output the raw commit message text only."""
 
         user_prompt = f"""Generate a commit message for these changes:
 
@@ -58,7 +71,7 @@ Changes:
         if breaking:
             user_prompt += "\nNOTE: This is a BREAKING CHANGE. Include BREAKING CHANGE footer.\n"
 
-        user_prompt += "\nGenerate the commit message (title and optional body):"
+        user_prompt += "\nOutput ONLY the commit message text (no explanations, no markdown blocks):"
 
         return system_prompt, user_prompt
 
