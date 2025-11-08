@@ -9,6 +9,9 @@ git clone https://github.com/the-yaml-life/gai.git && cd gai && pip install -e .
 
 ```
 commit        Generate conventional commit messages
+              --auto: add all, commit, and push automatically
+              --no-add: use only staged files
+              Interactive file selection with checkbox UI
 diff          Analyze branch differences
 review-merge  Preview merge with AI analysis
 resolve       AI-assisted conflict resolution
@@ -109,12 +112,37 @@ models:
 
 ### Commits
 ```bash
-gai commit                      # Interactive mode
-gai commit --dry-run            # Preview without committing
-gai commit --auto               # Auto-commit without confirmation
-gai commit --context "Fix bug"  # Add context
-gai commit --amend              # Amend last commit
+# Interactive mode - ask which files to add
+gai commit
+
+# Auto mode - add all, commit, and push automatically
+gai commit --auto
+
+# Use only staged files (skip git add)
+gai commit --no-add
+
+# Preview without committing
+gai commit --dry-run
+
+# Add context to generation
+gai commit --context "Fix bug"
+
+# Amend last commit
+gai commit --amend
+
+# Combine flags
+gai commit --auto --no-add      # Auto-commit staged files only + push
 ```
+
+**File Selection Modes:**
+
+When running `gai commit` interactively, you'll be prompted:
+- **Add all files** - `git add -A` (all changes)
+- **Select files** - Interactive checkbox to pick specific files
+- **Use only staged** - Skip adding, use what's already staged
+- **Cancel** - Abort commit
+
+With `--auto`, files are always added automatically unless `--no-add` is used.
 
 ### Diffs and Merges
 ```bash
