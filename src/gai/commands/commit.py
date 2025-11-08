@@ -88,48 +88,47 @@ class CommitCommand:
 
             # Handle adding files (interactive mode if not --auto and not --no-add)
             if not no_add:
-                # Check if there are unstaged files
-                unstaged_files = self.git.get_unstaged_files()
-                has_staged = self.git.has_staged_files()
+                # Auto mode: always add all files
+                if auto:
+                    if self.verbose:
+                        show_info("Running git add -A...")
+                    self.git.add_all()
+                else:
+                    # Interactive mode: ask how to add files
+                    unstaged_files = self.git.get_unstaged_files()
 
-                # Interactive mode: ask how to add files if not in auto mode
-                if not auto and unstaged_files:
-                    add_mode = ask_add_mode()
+                    if unstaged_files:
+                        add_mode = ask_add_mode()
 
-                    if add_mode is None:
-                        show_info("Commit cancelled")
-                        return
-                    elif add_mode == "all":
-                        if self.verbose:
-                            show_info("Running git add -A...")
-                        self.git.add_all()
-                        # Show files that will be committed
-                        show_info("\nFiles selected:")
-                        for f in unstaged_files:
-                            show_info(f"  - {f}")
-                        show_info("")
-                    elif add_mode == "select":
-                        selected_files = select_files_to_add(unstaged_files)
-                        if selected_files is None:
+                        if add_mode is None:
                             show_info("Commit cancelled")
                             return
-                        elif selected_files:
-                            show_info(f"\nFiles selected ({len(selected_files)}):")
-                            for f in selected_files:
+                        elif add_mode == "all":
+                            if self.verbose:
+                                show_info("Running git add -A...")
+                            self.git.add_all()
+                            # Show files that will be committed
+                            show_info("\nFiles selected:")
+                            for f in unstaged_files:
                                 show_info(f"  - {f}")
                             show_info("")
-                            self.git.add_files(selected_files)
-                        # If empty list, use only staged files (do nothing)
-                    elif add_mode == "staged":
-                        # Use only staged files, do nothing
-                        if self.verbose:
-                            show_info("Using only staged files...")
-                else:
-                    # Auto mode or no unstaged files: add all
-                    if unstaged_files:
-                        if self.verbose:
-                            show_info("Running git add -A...")
-                        self.git.add_all()
+                        elif add_mode == "select":
+                            selected_files = select_files_to_add(unstaged_files)
+                            if selected_files is None:
+                                show_info("Commit cancelled")
+                                return
+                            elif selected_files:
+                                show_info(f"\nFiles selected ({len(selected_files)}):")
+                                for f in selected_files:
+                                    show_info(f"  - {f}")
+                                show_info("")
+                                self.git.add_files(selected_files)
+                            # If empty list, use only staged files (do nothing)
+                        elif add_mode == "staged":
+                            # Use only staged files, do nothing
+                            if self.verbose:
+                                show_info("Using only staged files...")
+                    # If no unstaged files, continue with staged files
 
             # Get diff after staging
             diff = self.git.get_diff(cached=True)
