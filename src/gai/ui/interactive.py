@@ -327,11 +327,13 @@ def ask_add_mode() -> Optional[str]:
         choice = questionary.select(
             "How do you want to add files?",
             choices=[
-                questionary.Choice("Add all files (git add -A)", value="all"),
                 questionary.Choice("Select files to add", value="select"),
+                questionary.Choice("Add all files (git add -A)", value="all"),
                 questionary.Choice("Use only staged files", value="staged"),
                 questionary.Choice("Cancel", value="cancel"),
             ],
+            use_shortcuts=True,
+            use_arrow_keys=True,
             style=questionary.Style([
                 ('selected', 'fg:#00ff00'),
                 ('highlighted', 'fg:#00ffff bold'),
