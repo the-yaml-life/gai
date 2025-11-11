@@ -97,27 +97,40 @@ class Git:
             self._run("add", "--", *files)
 
     def get_unstaged_files(self) -> List[str]:
-        """Get list of unstaged files (modified or untracked)"""
+        """
+        Get list of unstaged files (modified, deleted, or untracked).
+
+        Returns files that have changes in working tree (not yet staged).
+
+        Git status porcelain format: XY filename
+        - X = staged status (index)
+        - Y = unstaged status (working tree)
+
+        Examples:
+        - ' M file.txt' = modified, not staged
+        - 'MM file.txt' = modified, staged, then modified again (includes both)
+        - '?? file.txt' = untracked
+        - 'M  file.txt' = modified and staged (not included, no working tree changes)
+        """
         result = self._run("status", "--porcelain")
         files = []
         for line in result.stdout.strip().split('\n'):
-            if not line:
+            if not line or len(line) < 3:
                 continue
-            # Parse git status porcelain format
-            # Format: XY filename
-            # X = staged status, Y = unstaged status
-            if len(line) < 3:
-                continue
-            unstaged_status = line[1]
-            # If unstaged status is not space, file has unstaged changes
+
+            # Parse status codes
+            staged_status = line[0]    # X
+            unstaged_status = line[1]  # Y
+            filename = line[3:]
+
+            # Include files with any unstaged changes (Y is not space)
+            # This includes: modified, deleted, untracked
             if unstaged_status != ' ':
-                # Extract filename (skip first 3 chars: XY + space)
-                filename = line[3:]
                 files.append(filename)
-            # Also include untracked files (status ??)
-            elif line.startswith('??'):
-                filename = line[3:]
+            # Also explicitly include untracked files (status ??)
+            elif staged_status == '?' and unstaged_status == '?':
                 files.append(filename)
+
         return files
 
     def has_staged_files(self) -> bool:
