@@ -114,14 +114,23 @@ class Git:
         """
         result = self._run("status", "--porcelain")
         files = []
-        for line in result.stdout.strip().split('\n'):
+
+        for line in result.stdout.split('\n'):
+            # Strip only trailing whitespace, keep leading structure
+            line = line.rstrip()
             if not line or len(line) < 3:
                 continue
 
-            # Parse status codes
+            # Git porcelain format is exactly: XY<space>filename
+            # where X and Y are each one character
+            # Example: ' M file.txt' or '?? file.txt'
             staged_status = line[0]    # X
             unstaged_status = line[1]  # Y
-            filename = line[3:]
+            # Filename starts at position 3 (after XY and the space)
+            filename = line[3:] if len(line) > 3 else ""
+
+            if not filename:
+                continue
 
             # Include files with any unstaged changes (Y is not space)
             # This includes: modified, deleted, untracked
