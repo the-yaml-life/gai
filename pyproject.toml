@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gai-cli"
-version = "0.3.0"
+version = "0.3.1"
 description = "AI-powered git assistant for commit messages, merge reviews, and intelligent diff analysis"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -115,7 +115,7 @@ line-length = 100
 target-version = ['py38', 'py39', 'py310', 'py311']
 
 [tool.mypy]
-python_version = "0.3.0"
+python_version = "0.3.1"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
