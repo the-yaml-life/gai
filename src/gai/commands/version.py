@@ -72,7 +72,7 @@ class VersionCommand:
                         self.console.print(f"[red]Invalid choice. Please enter 1-{len(projects)}[/red]")
 
                 self.console.print()
-                self.console.print(f"[cyan]Selected:[/dim] {selected_project}")
+                self.console.print(f"[cyan]Selected:[/cyan] {selected_project}")
                 self.console.print()
 
         # Create version manager with selected project

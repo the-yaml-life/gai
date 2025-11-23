@@ -110,10 +110,14 @@ class AnannasAdapter:
             if "billing" in error_msg.lower() or "credit" in error_msg.lower() or "insufficient" in error_msg.lower():
                 raise BillingError(error_details, provider="anannas")
 
+            # Determine if this error should skip retry
+            skip_retry = response.status_code in [400, 401, 403, 404, 422]
+
             raise ProviderError(
                 f"Anannas API HTTP {response.status_code}: {error_details}",
                 status_code=response.status_code,
-                provider="anannas"
+                provider="anannas",
+                skip_retry=skip_retry
             )
 
     def parse_response(self, response: Dict[str, Any]) -> str:

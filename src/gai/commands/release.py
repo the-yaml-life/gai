@@ -45,8 +45,12 @@ class ReleaseCommand:
 
         try:
             # Detect projects from tags
+            if self.verbose:
+                self.console.print("[dim]Detecting projects from tags...[/dim]")
             temp_vm = VersionManager(self.git)
             projects = temp_vm.list_projects()
+            if self.verbose:
+                self.console.print(f"[dim]Found {len(projects)} project(s): {projects}[/dim]")
 
             # Select project (interactive if multiple)
             selected_project = None
@@ -88,7 +92,7 @@ class ReleaseCommand:
                             self.console.print(f"[red]Invalid choice. Please enter 1-{len(projects)}[/red]")
 
                     self.console.print()
-                    self.console.print(f"[cyan]Selected:[/dim] {selected_project}")
+                    self.console.print(f"[cyan]Selected:[/cyan] {selected_project}")
                     self.console.print()
 
             # Create version manager with selected project

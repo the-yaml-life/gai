@@ -105,10 +105,14 @@ class GroqAdapter:
 
             self._log(f"HTTP {response.status_code}: {error_details}")
 
+            # Determine if this error should skip retry
+            skip_retry = response.status_code in [400, 401, 403, 404, 422]
+
             raise ProviderError(
                 f"Groq API HTTP {response.status_code}: {error_details}",
                 status_code=response.status_code,
-                provider="groq"
+                provider="groq",
+                skip_retry=skip_retry
             )
 
     def parse_response(self, response: Dict[str, Any]) -> str:

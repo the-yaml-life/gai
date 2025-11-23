@@ -215,8 +215,8 @@ class InferenceEngine:
             # Execute batch in parallel
             def generate_one(idx: int, prompt_data: tuple, model: str) -> tuple:
                 """Generate one completion and return (index, result, success)"""
-                prompt_text, description, max_tokens = prompt_data
-                self._log(f"[{idx}] {description} using {model}")
+                prompt_text, description, prompt_max_tokens = prompt_data
+                self._log(f"[{idx}] {description} using {model} (max_tokens={prompt_max_tokens})")
 
                 try:
                     # Create request
@@ -228,8 +228,10 @@ class InferenceEngine:
                     request = InferenceRequest(
                         messages=messages,
                         model=model,
-                        max_tokens=max_tokens
+                        max_tokens=prompt_max_tokens
                     )
+
+                    self._log(f"[{idx}] Request created with max_tokens={request.max_tokens}")
 
                     # Generate using engine
                     response = self.generate(request)

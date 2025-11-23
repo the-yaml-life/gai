@@ -11,7 +11,7 @@ class InferenceRequest:
     """Request for inference generation"""
     messages: List[Dict[str, str]]
     model: Optional[str] = None
-    max_tokens: int = 50000
+    max_tokens: int = 4096  # Reduced from 50000 to avoid payload errors
     temperature: float = 0.3
 
     @classmethod
