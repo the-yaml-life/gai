@@ -204,7 +204,7 @@ class ReleaseCommand:
             # 2. Generate CHANGELOG
             if not skip_changelog:
                 self.console.print("  [dim]2.[/dim] Generating CHANGELOG.md...")
-                self._update_changelog(next_version, commits, repo_root)
+                self._update_changelog(version_manager, next_version, commits, repo_root)
 
             # 3. Stage changes
             self.console.print("  [dim]3.[/dim] Staging changes...")
@@ -249,6 +249,10 @@ class ReleaseCommand:
             ))
             self.console.print()
 
+        except (click.exceptions.Abort, KeyboardInterrupt):
+            self.console.print()
+            self.console.print("[dim]Release cancelled[/dim]")
+            self.console.print()
         except GitError as e:
             self.console.print(f"[red]Git error: {e}[/red]")
             if self.verbose:
@@ -260,11 +264,12 @@ class ReleaseCommand:
                 import traceback
                 traceback.print_exc()
 
-    def _update_changelog(self, version, commits, repo_root: Path):
+    def _update_changelog(self, version_manager, version, commits, repo_root: Path):
         """
         Update CHANGELOG.md with new version entry.
 
         Args:
+            version_manager: VersionManager instance
             version: New version
             commits: List of commits
             repo_root: Repository root path
