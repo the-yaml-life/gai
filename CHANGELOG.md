@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.3.0] - 2025-11-23
+
+### Features
+
+- improve error handling and logging docs(inference/adapters): add skip retry flag to error handling docs(inference/engine): add max_tokens parameter to request creation perf(inference/engine): reduce max_tokens value to avoid payload errors docs(inference/models): reduce max_tokens value to avoid payload errors docs(inference/adapters/anannas): add skip retry flag to error handling docs(inference/adapters/groq): add skip retry flag to error handling docs(inference/adapters/openrouter): add skip retry flag to error handling refactor(commands/release): improve error handling and logging refactor(commands/version): improve error handling and logging refactor(inference/engine): improve error handling and logging refactor(inference/models): reduce max_tokens value to avoid payload errors (commands) [`fd93ba7`] 
+
+
 ## [v0.2.0] - 2025-11-23
 
 ### Features
