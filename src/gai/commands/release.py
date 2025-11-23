@@ -213,7 +213,12 @@ class ReleaseCommand:
             # 3. Stage changes
             self.console.print("  [dim]3.[/dim] Staging changes...")
             self.git.run(['add', 'VERSION'])
-            self.git.run(['add', 'pyproject.toml'])
+
+            # Only add pyproject.toml if it exists
+            pyproject_file = repo_root / "pyproject.toml"
+            if pyproject_file.exists():
+                self.git.run(['add', 'pyproject.toml'])
+
             if not skip_changelog:
                 self.git.run(['add', 'CHANGELOG.md'])
 
