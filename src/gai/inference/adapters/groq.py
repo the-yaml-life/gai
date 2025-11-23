@@ -36,7 +36,31 @@ class GroqAdapter:
             "Content-Type": "application/json"
         }
 
-        response = requests.post(self.api_url, json=payload, headers=headers, timeout=30)
+        try:
+            response = requests.post(self.api_url, json=payload, headers=headers, timeout=60)
+        except requests.exceptions.Timeout as e:
+            self._log(f"Timeout after 60s for {model}")
+            raise ProviderError(
+                f"Groq API timeout after 60s: {str(e)}",
+                status_code=None,
+                provider="groq"
+            )
+        except requests.exceptions.ConnectionError as e:
+            self._log(f"Connection error for {model}: {e}")
+            raise ProviderError(
+                f"Groq API connection error: {str(e)}",
+                status_code=None,
+                provider="groq"
+            )
+        except requests.exceptions.RequestException as e:
+            self._log(f"Request exception for {model}: {e}")
+            raise ProviderError(
+                f"Groq API request error: {str(e)}",
+                status_code=None,
+                provider="groq"
+            )
+
+        self._log(f"Response status: {response.status_code}")
 
         if response.status_code == 200:
             data = response.json()
@@ -55,8 +79,13 @@ class GroqAdapter:
 
         elif response.status_code == 429:
             # Rate limit - extract wait time
-            error_data = response.json()
-            error_msg = error_data.get("error", {}).get("message", "")
+            try:
+                error_data = response.json()
+                error_msg = error_data.get("error", {}).get("message", "")
+            except Exception:
+                error_msg = response.text[:200] if response.text else "Rate limit (no details)"
+
+            self._log(f"Rate limit: {error_msg}")
 
             wait_match = re.search(r'try again in ([\d.]+)s', error_msg)
             wait_time = float(wait_match.group(1)) + 1 if wait_match else 60.0
@@ -64,15 +93,20 @@ class GroqAdapter:
             raise RateLimitError(error_msg, model=model, wait_time=wait_time)
 
         else:
-            # Other error
+            # Other error - try to extract meaningful error message
             try:
                 error_data = response.json()
                 error_msg = error_data.get("error", {}).get("message", "Unknown error")
-            except:
-                error_msg = response.text or "Unknown error"
+                error_type = error_data.get("error", {}).get("type", "unknown")
+                error_details = f"{error_type}: {error_msg}"
+            except Exception:
+                # Not JSON or malformed - use raw text
+                error_details = response.text[:500] if response.text else "No error details"
+
+            self._log(f"HTTP {response.status_code}: {error_details}")
 
             raise ProviderError(
-                f"Groq API error: {error_msg}",
+                f"Groq API HTTP {response.status_code}: {error_details}",
                 status_code=response.status_code,
                 provider="groq"
             )

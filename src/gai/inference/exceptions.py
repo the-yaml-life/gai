@@ -36,4 +36,15 @@ class AllModelsFailedError(InferenceError):
     def __init__(self, errors: dict = None):
         self.errors = errors or {}
         models = list(errors.keys()) if errors else []
-        super().__init__(f"All {len(models)} models failed: {models}")
+
+        # Create detailed error message
+        if errors:
+            error_summary = f"All {len(models)} models failed:\n"
+            for model, error in list(errors.items())[:5]:  # Show first 5
+                error_str = str(error)[:100]  # Truncate long errors
+                error_summary += f"  • {model}: {error_str}\n"
+            if len(errors) > 5:
+                error_summary += f"  ... and {len(errors) - 5} more\n"
+            super().__init__(error_summary)
+        else:
+            super().__init__(f"All {len(models)} models failed")

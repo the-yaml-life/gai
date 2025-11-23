@@ -70,29 +70,119 @@ class CommitInfo:
 class VersionManager:
     """Manages semantic versioning for git repository"""
 
-    def __init__(self, git):
+    def __init__(self, git, project_name: Optional[str] = None):
         """
         Initialize version manager.
 
         Args:
             git: Git instance from gai.core.git
+            project_name: Optional project name for monorepo support
         """
         self.git = git
+        self.project_name = project_name
+
+    def list_projects(self) -> List[str]:
+        """
+        List all projects detected from git tags.
+
+        Detects projects from tag patterns:
+        - project-name-1.2.3  (monorepo style)
+        - v1.2.3              (single project)
+
+        Returns:
+            List of project names (empty list for single project with v*.*.* tags)
+        """
+        try:
+            # Get all tags
+            result = self.git.run(['tag', '-l'])
+            if result.returncode != 0:
+                return []
+
+            tags = result.stdout.strip().split('\n')
+            if not tags or tags == ['']:
+                return []
+
+            projects = set()
+
+            for tag in tags:
+                # Check for monorepo pattern: project-name-1.2.3
+                match = re.match(r'^([a-zA-Z0-9_-]+)-(\d+\.\d+\.\d+)$', tag)
+                if match:
+                    project_name = match.group(1)
+                    projects.add(project_name)
+
+            return sorted(list(projects))
+        except Exception:
+            return []
+
+    def detect_current_project(self, repo_root: Optional[Path] = None) -> Optional[str]:
+        """
+        Detect current project name from pyproject.toml or directory.
+
+        Args:
+            repo_root: Repository root path (auto-detected if None)
+
+        Returns:
+            Project name or None if can't detect
+        """
+        if repo_root is None:
+            try:
+                repo_root = Path(self.git.repo_root())
+            except Exception:
+                return None
+
+        # Try to read from pyproject.toml
+        pyproject_file = repo_root / "pyproject.toml"
+        if pyproject_file.exists():
+            try:
+                import re
+                content = pyproject_file.read_text()
+
+                # Look for name = "project-name" in [project] section
+                match = re.search(r'^\[project\].*?^name\s*=\s*["\']([^"\']+)["\']',
+                                content, re.MULTILINE | re.DOTALL)
+                if match:
+                    project_name = match.group(1)
+                    # Normalize name (remove -cli suffix, etc.)
+                    project_name = project_name.replace('-cli', '')
+                    return project_name
+            except Exception:
+                pass
+
+        # Fallback to directory name
+        return repo_root.name
 
     def get_current_version(self) -> Optional[Version]:
         """
         Get current version from latest git tag.
 
+        Supports:
+        - Monorepo: project-name-1.2.3 (if project_name is set)
+        - Single project: v1.2.3
+
         Returns:
             Current Version or None if no version tags exist
         """
         try:
-            # Get latest tag matching v*.*.* pattern
-            result = self.git.run(['describe', '--tags', '--abbrev=0', '--match', 'v*.*.*'])
+            if self.project_name:
+                # Monorepo mode: match project-name-*.*.*
+                pattern = f'{self.project_name}-*.*.*'
+                result = self.git.run(['describe', '--tags', '--abbrev=0', '--match', pattern])
 
-            if result.returncode == 0:
-                tag = result.stdout.strip()
-                return Version.from_string(tag)
+                if result.returncode == 0:
+                    tag = result.stdout.strip()
+                    # Extract version from project-name-1.2.3
+                    match = re.match(r'^[a-zA-Z0-9_-]+-(.+)$', tag)
+                    if match:
+                        version_str = match.group(1)
+                        return Version.from_string(version_str)
+            else:
+                # Single project mode: match v*.*.*
+                result = self.git.run(['describe', '--tags', '--abbrev=0', '--match', 'v*.*.*'])
+
+                if result.returncode == 0:
+                    tag = result.stdout.strip()
+                    return Version.from_string(tag)
 
             return None
         except Exception:
@@ -110,7 +200,16 @@ class VersionManager:
         """
         if tag is None:
             current_version = self.get_current_version()
-            tag = str(current_version) if current_version else None
+            if current_version:
+                # Build tag name based on mode
+                if self.project_name:
+                    # Monorepo: project-name-1.2.3
+                    tag = f"{self.project_name}-{current_version.major}.{current_version.minor}.{current_version.patch}"
+                else:
+                    # Single project: v1.2.3
+                    tag = str(current_version)
+            else:
+                tag = None
 
         # Get commit hashes
         if tag:
@@ -274,6 +373,25 @@ class VersionManager:
 
         return current.bump(bump_type)
 
+    def format_tag_name(self, version: Version) -> str:
+        """
+        Format tag name based on mode.
+
+        Args:
+            version: Version to format
+
+        Returns:
+            Tag name (e.g., "v1.2.3" or "project-name-1.2.3")
+        """
+        version_str = f"{version.major}.{version.minor}.{version.patch}"
+
+        if self.project_name:
+            # Monorepo: project-name-1.2.3
+            return f"{self.project_name}-{version_str}"
+        else:
+            # Single project: v1.2.3
+            return f"v{version_str}"
+
     def update_version_files(self, version: Version, repo_root: Path):
         """
         Update version in project files.
@@ -289,7 +407,9 @@ class VersionManager:
         # Update VERSION file
         version_file = repo_root / "VERSION"
         with open(version_file, 'w') as f:
-            f.write(f"{version}\n")
+            # In monorepo mode, write full tag name
+            tag_name = self.format_tag_name(version)
+            f.write(f"{tag_name}\n")
 
         # Update pyproject.toml if it exists
         pyproject_file = repo_root / "pyproject.toml"

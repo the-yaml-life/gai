@@ -19,7 +19,7 @@ class VersionCommand:
         self.git = git
         self.verbose = verbose
         self.console = Console()
-        self.version_manager = VersionManager(git)
+        # version_manager will be created after project selection
 
     def run(self, show_commits: bool = False):
         """
@@ -32,8 +32,54 @@ class VersionCommand:
         self.console.print("[cyan]Version Information[/cyan]")
         self.console.print()
 
+        # Detect projects from tags
+        temp_vm = VersionManager(self.git)
+        projects = temp_vm.list_projects()
+
+        # Select project (interactive if multiple)
+        selected_project = None
+        if projects:
+            if len(projects) == 1:
+                selected_project = projects[0]
+                self.console.print(f"[dim]Project:[/dim] {selected_project}")
+                self.console.print()
+            else:
+                # Multiple projects - show menu
+                self.console.print("[cyan]Multiple projects detected:[/cyan]")
+                self.console.print()
+
+                for idx, proj in enumerate(projects, 1):
+                    # Get current version for this project
+                    proj_vm = VersionManager(self.git, project_name=proj)
+                    proj_version = proj_vm.get_current_version()
+                    version_str = str(proj_version) if proj_version else "[dim]no version[/dim]"
+                    self.console.print(f"  [{idx}] {proj} ({version_str})")
+
+                self.console.print()
+
+                # Ask user to select
+                import click
+                while True:
+                    choice = click.prompt(
+                        "Select project number",
+                        type=int,
+                        default=1
+                    )
+                    if 1 <= choice <= len(projects):
+                        selected_project = projects[choice - 1]
+                        break
+                    else:
+                        self.console.print(f"[red]Invalid choice. Please enter 1-{len(projects)}[/red]")
+
+                self.console.print()
+                self.console.print(f"[cyan]Selected:[/dim] {selected_project}")
+                self.console.print()
+
+        # Create version manager with selected project
+        version_manager = VersionManager(self.git, project_name=selected_project)
+
         # Get current version
-        current = self.version_manager.get_current_version()
+        current = version_manager.get_current_version()
 
         if current is None:
             self.console.print(Panel(
@@ -47,10 +93,10 @@ class VersionCommand:
             return
 
         # Get commits since last version
-        commits = self.version_manager.get_commits_since_tag()
+        commits = version_manager.get_commits_since_tag()
 
         # Detect suggested bump
-        suggested_bump = self.version_manager.detect_bump_type(commits)
+        suggested_bump = version_manager.detect_bump_type(commits)
         next_version = current.bump(suggested_bump)
 
         # Create version table
@@ -86,7 +132,7 @@ class VersionCommand:
             self.console.print("[cyan]Commits since last version:[/cyan]")
             self.console.print()
 
-            groups = self.version_manager.group_commits_by_type(commits)
+            groups = version_manager.group_commits_by_type(commits)
 
             # Count by type
             type_counts = {}

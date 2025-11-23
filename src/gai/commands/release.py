@@ -21,7 +21,7 @@ class ReleaseCommand:
         self.git = git
         self.verbose = verbose
         self.console = Console()
-        self.version_manager = VersionManager(git)
+        # version_manager will be created after project selection
 
     def run(
         self,
@@ -44,6 +44,56 @@ class ReleaseCommand:
         self.console.print()
 
         try:
+            # Detect projects from tags
+            temp_vm = VersionManager(self.git)
+            projects = temp_vm.list_projects()
+
+            # Select project (interactive if multiple)
+            selected_project = None
+            if projects:
+                if len(projects) == 1:
+                    selected_project = projects[0]
+                    self.console.print(f"[dim]Project:[/dim] {selected_project}")
+                    self.console.print()
+                else:
+                    # Multiple projects - show menu
+                    self.console.print("[cyan]Multiple projects detected:[/cyan]")
+                    self.console.print()
+
+                    for idx, proj in enumerate(projects, 1):
+                        # Get current version for this project
+                        proj_vm = VersionManager(self.git, project_name=proj)
+                        proj_version = proj_vm.get_current_version()
+                        version_str = str(proj_version) if proj_version else "[dim]no version[/dim]"
+                        self.console.print(f"  [{idx}] {proj} ({version_str})")
+
+                    self.console.print()
+
+                    if auto:
+                        self.console.print("[red]Cannot use --auto with multiple projects[/red]")
+                        self.console.print("[dim]Please specify project with --project flag (not yet implemented)[/dim]")
+                        return
+
+                    # Ask user to select
+                    while True:
+                        choice = click.prompt(
+                            "Select project number",
+                            type=int,
+                            default=1
+                        )
+                        if 1 <= choice <= len(projects):
+                            selected_project = projects[choice - 1]
+                            break
+                        else:
+                            self.console.print(f"[red]Invalid choice. Please enter 1-{len(projects)}[/red]")
+
+                    self.console.print()
+                    self.console.print(f"[cyan]Selected:[/dim] {selected_project}")
+                    self.console.print()
+
+            # Create version manager with selected project
+            version_manager = VersionManager(self.git, project_name=selected_project)
+
             # Check for uncommitted changes
             status = self.git.get_status()
             if status.strip():
@@ -55,10 +105,10 @@ class ReleaseCommand:
                         return
 
             # Get current version
-            current = self.version_manager.get_current_version()
+            current = version_manager.get_current_version()
 
             # Get commits since last version
-            commits = self.version_manager.get_commits_since_tag()
+            commits = version_manager.get_commits_since_tag()
 
             if not commits and current is not None:
                 self.console.print(Panel(
@@ -80,12 +130,12 @@ class ReleaseCommand:
                     self.console.print("[dim]Valid types: major, minor, patch[/dim]")
                     return
             else:
-                selected_bump = self.version_manager.detect_bump_type(commits)
+                selected_bump = version_manager.detect_bump_type(commits)
 
             # Calculate next version
             if current is None:
                 # First version
-                next_version = self.version_manager.get_next_version(BumpType.MINOR)
+                next_version = version_manager.get_next_version(BumpType.MINOR)
                 self.console.print("[cyan]First release detected[/cyan]")
             else:
                 next_version = current.bump(selected_bump)
@@ -106,23 +156,26 @@ class ReleaseCommand:
 
             # Show commit summary
             if commits:
-                groups = self.version_manager.group_commits_by_type(commits)
+                groups = version_manager.group_commits_by_type(commits)
                 self.console.print("[cyan]Changes:[/cyan]")
                 for commit_type, commit_list in groups.items():
                     emoji = self._get_type_emoji(commit_type)
                     self.console.print(f"  {emoji} {commit_type}: {len(commit_list)}")
                 self.console.print()
 
+            # Calculate tag name
+            tag_name = version_manager.format_tag_name(next_version)
+
             # Dry run mode
             if dry_run:
                 self.console.print(Panel(
                     "[yellow]DRY RUN[/yellow]\n\n"
                     "The following actions would be performed:\n"
-                    f"1. Update VERSION file to {next_version}\n"
+                    f"1. Update VERSION file to {tag_name}\n"
                     f"2. Update pyproject.toml version to {next_version}\n" +
                     ("3. Generate CHANGELOG.md entry\n" if not skip_changelog else "") +
-                    f"4. Commit changes (chore: bump version to {next_version})\n"
-                    f"5. Create git tag {next_version}\n"
+                    f"4. Commit changes (chore: bump version to {tag_name})\n"
+                    f"5. Create git tag {tag_name}\n"
                     f"6. Push tag to remote",
                     title="Dry Run",
                     border_style="yellow"
@@ -146,7 +199,7 @@ class ReleaseCommand:
 
             # 1. Update version files
             self.console.print("  [dim]1.[/dim] Updating version files...")
-            self.version_manager.update_version_files(next_version, repo_root)
+            version_manager.update_version_files(next_version, repo_root)
 
             # 2. Generate CHANGELOG
             if not skip_changelog:
@@ -167,8 +220,8 @@ class ReleaseCommand:
 
             # 5. Create tag
             self.console.print("  [dim]5.[/dim] Creating git tag...")
-            tag_message = f"Release {next_version}\n\n{len(commits)} commits"
-            self.git.run(['tag', '-a', str(next_version), '-m', tag_message])
+            tag_message = f"Release {tag_name}\n\n{len(commits)} commits"
+            self.git.run(['tag', '-a', tag_name, '-m', tag_message])
 
             # 6. Push (if not auto, ask)
             should_push = auto
@@ -188,8 +241,8 @@ class ReleaseCommand:
             # Success!
             self.console.print()
             self.console.print(Panel(
-                f"[green]Release {next_version} created successfully[/green]\n\n"
-                f"Tag: {next_version}\n"
+                f"[green]Release {tag_name} created successfully[/green]\n\n"
+                f"Tag: {tag_name}\n"
                 f"Commits: {len(commits)}",
                 title="Success",
                 border_style="green"
@@ -219,7 +272,7 @@ class ReleaseCommand:
         changelog_file = repo_root / "CHANGELOG.md"
 
         # Generate new entry
-        new_entry = self.version_manager.generate_changelog_entry(version, commits)
+        new_entry = version_manager.generate_changelog_entry(version, commits)
 
         # Read existing changelog or create new
         if changelog_file.exists():

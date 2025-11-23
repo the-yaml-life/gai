@@ -235,13 +235,18 @@ class InferenceEngine:
                     response = self.generate(request)
 
                     self._log(f"[{idx}] ✓ Complete with {model}")
+                    print(f"  ✓ [{idx}] {model}: Success")  # Always print success
                     return (idx, response.text, True)
 
                 except (RateLimitError, BillingError) as e:
-                    self._log(f"[{idx}] Rate limit/billing error with {model}: {e}")
+                    error_msg = str(e)[:200]  # Truncate long messages
+                    self._log(f"[{idx}] Rate limit/billing error with {model}: {error_msg}")
+                    print(f"  ⚠️  [{idx}] {model}: {error_msg}")  # Always print (not just verbose)
                     return (idx, "", False)
                 except Exception as e:
-                    self._log(f"[{idx}] Unexpected error with {model}: {e}")
+                    error_msg = str(e)[:200]  # Truncate long messages
+                    self._log(f"[{idx}] Error with {model}: {error_msg}")
+                    print(f"  ✗ [{idx}] {model}: {error_msg}")  # Always print (not just verbose)
                     return (idx, "", False)
 
             # Run tasks in parallel
